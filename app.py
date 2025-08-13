@@ -32,7 +32,9 @@ def apply_plotly_layout(fig):
     )
     return fig
 
-# Slim, Power BI–style UI
+# =========================
+# Global CSS (Power BI style + login inputs fix)
+# =========================
 st.markdown(
     f"""
     <style>
@@ -46,15 +48,15 @@ st.markdown(
     }}
     .title-left h1 {{ font-size: 1.15rem; margin: 0; color: {TEXT}; }}
 
-    /* KPI row: slim cards in one line (wrap only on small screens) */
+    /* KPI cards (slim, one line via st.columns) */
     .kpi-card {{
         background: {CARD_BG};
         border: 1px solid #e5e7eb;
         border-left: 4px solid {PRIMARY};
         border-radius: 12px;
-        padding: 8px 10px;              /* smaller padding */
+        padding: 8px 10px;
         box-shadow: 0 1px 2px rgba(16,24,40,0.04);
-        min-height: 64px;               /* shorter card */
+        min-height: 64px;
         height: 100%;
     }}
     .kpi-title {{ font-size: 0.72rem; color: #6b7280; margin-bottom: 2px; }}
@@ -70,13 +72,40 @@ st.markdown(
         margin-bottom: 10px;
     }}
     .card h3 {{ margin-top: 0.2rem; color: {TEXT}; font-size: 1.0rem; }}
+
+    /* Login inputs: white boxes + green focus */
+    div[data-testid="stTextInput"] input,
+    div[data-testid="stPassword"] input,
+    .stTextInput input,
+    .stPassword input,
+    div[data-baseweb="input"] input {{
+      background-color: #ffffff !important;
+      color: #111827 !important;
+      border: 1px solid #cbd5e1 !important;
+      border-radius: 10px !important;
+      padding: 10px 12px !important;
+      box-shadow: none !important;
+    }}
+    div[data-testid="stTextInput"] input:focus,
+    div[data-testid="stPassword"] input:focus,
+    .stTextInput input:focus,
+    .stPassword input:focus,
+    div[data-baseweb="input"] input:focus {{
+      border: 1.5px solid {PRIMARY} !important;
+      outline: none !important;
+      box-shadow: 0 0 0 3px rgba(11,110,79,0.10) !important;
+    }}
+    div[data-testid="stTextInput"] label,
+    div[data-testid="stPassword"] label {{
+      margin-bottom: 6px !important;
+    }}
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 # =========================
-# Auth (Secrets)
+# Auth (from Secrets)
 # =========================
 # Secrets example (TOML):
 # COOKIE_KEY = "replace_with_random_secret"
@@ -96,17 +125,29 @@ creds = {"usernames": {}}
 for uname, u in users_cfg.items():
     creds["usernames"][uname] = {"name": u["name"], "email": u["email"], "password": u["password_hash"]}
 
-authenticator = stauth.Authenticate(credentials=creds, cookie_name="merchant_portal", key=cookie_key, cookie_expiry_days=7)
-authenticator.login(location="main")
+authenticator = stauth.Authenticate(
+    credentials=creds,
+    cookie_name="merchant_portal",
+    key=cookie_key,
+    cookie_expiry_days=7,
+)
+
+# Put login inside a card for a cleaner look
+with st.container():
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    authenticator.login(location="main")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 auth_status = st.session_state.get("authentication_status")
 name = st.session_state.get("name")
 username = st.session_state.get("username")
 
 if auth_status is False:
-    st.error("Invalid credentials"); st.stop()
+    st.error("Invalid credentials")
+    st.stop()
 elif auth_status is None:
-    st.info("Please log in."); st.stop()
+    st.info("Please log in.")
+    st.stop()
 
 authenticator.logout(location="sidebar")
 st.sidebar.write(f"Hello, **{name}**")
@@ -120,7 +161,8 @@ def get_user_record(cfg: dict, uname: str):
 
 merchant_rec = get_user_record(users_cfg, username)
 if not merchant_rec or "merchant_id" not in merchant_rec:
-    st.error("Merchant mapping not found for this user. Check Secrets for 'merchant_id'."); st.stop()
+    st.error("Merchant mapping not found for this user. Check Secrets for 'merchant_id'.")
+    st.stop()
 merchant_id_value = merchant_rec["merchant_id"]
 
 # =========================
@@ -141,7 +183,9 @@ required_cols = {
     "Terminal ID","Device Serial","Product Type","Issuing Bank","BIN"
 }
 missing = required_cols - set(tx.columns)
-if missing: st.error(f"Missing required column(s): {', '.join(sorted(missing))}"); st.stop()
+if missing:
+    st.error(f"Missing required column(s): {', '.join(sorted(missing))}")
+    st.stop()
 
 tx[MERCHANT_ID_COL] = tx[MERCHANT_ID_COL].astype(str).str.strip()
 tx["Transaction Date"] = pd.to_datetime(tx["Transaction Date"], errors="coerce")
@@ -153,7 +197,8 @@ for c in ["Product Type","Issuing Bank","Decline Reason","Terminal ID","Device S
 
 f0 = tx[tx[MERCHANT_ID_COL] == merchant_id_value].copy()
 if f0.empty:
-    st.warning(f"No transactions for '{merchant_id_value}' in '{MERCHANT_ID_COL}'."); st.stop()
+    st.warning(f"No transactions for '{merchant_id_value}' in '{MERCHANT_ID_COL}'.")
+    st.stop()
 
 def is_purchase(s): return s.str.lower().eq("purchase")
 def is_refund(s):  return s.str.lower().eq("refund")
@@ -200,10 +245,10 @@ f = f0[flt].copy()
 # =========================
 def safe_div(n, d): return (n / d) if d else np.nan
 
-# Per your request: “# Transactions” = ALL rows (Purchases + Refunds + Reversals)
+# Your request: “# Transactions” = ALL rows (Purchases + Refunds + Reversals)
 transactions_cnt = int(len(f))
 
-# Keep purchase-flow metrics for funnel/ratios
+# Purchase-flow metrics (for funnel/ratios)
 attempts_mask     = f["is_purchase"]
 approved_purchases= attempts_mask & f["is_approved"]
 declined_purchases= attempts_mask & (~f["is_approved"])
@@ -214,7 +259,7 @@ gross_requests = float(f.loc[attempts_mask, "Request Amount"].sum())
 net_settled    = float(f.loc[settled_purchases, "Settle Amount"].sum())
 settled_cnt    = int(settled_purchases.sum())
 approved_cnt   = int(approved_purchases.sum())
-attempts_cnt   = int(attempts_mask.sum())  # used for funnel
+attempts_cnt   = int(attempts_mask.sum())  # for funnel only
 approval_rate  = safe_div(approved_cnt, attempts_cnt)
 decline_rate   = safe_div(int(declined_purchases.sum()), attempts_cnt)
 aov_settled    = safe_div(net_settled, settled_cnt)
@@ -222,7 +267,7 @@ aov_settled    = safe_div(net_settled, settled_cnt)
 refund_total   = float(f.loc[refunds_f, "Settle Amount"].sum())  # negative
 net_after_ref  = net_settled + refund_total
 
-# Header image (optional)
+# Optional header image
 header_path = None
 for p in ("assets/header.jpg","assets/header.png","assets/header.jpeg","assets/header.webp"):
     if os.path.exists(p): header_path = p; break
@@ -230,6 +275,7 @@ if header_path:
     st.image(header_path, use_column_width=True)
 else:
     st.markdown('<div class="header-row"><div class="title-left"><h1>Merchant Dashboard</h1></div></div>', unsafe_allow_html=True)
+
 st.caption(f"Merchant: **{merchant_id_value}**  •  Source: `{f['__path__'].iat[0]}`  •  Date: {start_date} → {end_date}")
 
 def kpi_card(title, value, sub=""):
@@ -266,7 +312,6 @@ c1, c2 = st.columns((2,1), gap="small")
 with c1:
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.markdown("### Daily Net Settled & Approval Rate")
-    # Daily aggregates over attempts (purchases)
     df_day_base = f.loc[attempts_mask, ["Transaction Date", "Settle Amount", "is_approved"]].copy()
     if not df_day_base.empty:
         df_day_base["date"] = df_day_base["Transaction Date"].dt.date
