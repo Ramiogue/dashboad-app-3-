@@ -8,12 +8,73 @@ import streamlit as st
 import streamlit_authenticator as stauth
 
 # =========================
-# Page & style
+# Page setup & lightweight styling
 # =========================
-st.set_page_config(
-    page_title="Merchant Portal",
-    page_icon="📊",
-    layout="wide",
+st.set_page_config(page_title="Merchant Portal", page_icon="📊", layout="wide")
+
+PRIMARY = "#0B6E4F"      # green
+GREY_BG = "#f5f7fb"      # soft grey
+CARD_BG = "#ffffff"      # white
+TEXT = "#1f2937"
+
+# Subtle CSS to get a Power BI-ish card feel
+st.markdown(
+    f"""
+    <style>
+    .stApp {{
+        background: {GREY_BG};
+    }}
+    .block-container {{
+        padding-top: 1.2rem;
+        padding-bottom: 2rem;
+    }}
+    .kpi-grid {{
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 12px;
+        margin-bottom: 8px;
+    }}
+    @media (max-width: 1400px) {{
+        .kpi-grid {{ grid-template-columns: repeat(3, 1fr); }}
+    }}
+    @media (max-width: 900px) {{
+        .kpi-grid {{ grid-template-columns: repeat(2, 1fr); }}
+    }}
+    .kpi-card {{
+        background: {CARD_BG};
+        border: 1px solid #e5e7eb;
+        border-left: 6px solid {PRIMARY};
+        border-radius: 12px;
+        padding: 12px 14px;
+        box-shadow: 0 1px 2px rgba(16,24,40,0.04);
+        height: 100%;
+    }}
+    .kpi-title {{
+        font-size: 0.80rem;
+        color: #6b7280;
+        margin-bottom: 6px;
+    }}
+    .kpi-value {{
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: {TEXT};
+        line-height: 1.1;
+    }}
+    .kpi-sub {{
+        font-size: 0.85rem;
+        color: #6b7280;
+        margin-top: 4px;
+    }}
+    .card {{
+        background: {CARD_BG};
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 12px;
+        box-shadow: 0 1px 2px rgba(16,24,40,0.04);
+    }}
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
 # =========================
@@ -21,21 +82,13 @@ st.set_page_config(
 # =========================
 # Secrets example:
 # COOKIE_KEY = "replace_with_random_secret"
-#
-# [users."M001"]
-# name = "Merchant A"
-# email = "a@example.com"
-# password_hash = "$2b$12$D9ZTRh3DUXkdIibFhes.7eKWQLTc.cdJJwtOsFTLbBuxkanfkkbJm"  # for M001@123
-# merchant_id = "M001 - Merchant A"  # must match a value in your chosen merchant_id_col
-#
-# [users."M002"]
-# name = "Merchant B"
-# email = "b@example.com"
-# password_hash = "$2b$12$rGu5g8HsKr.0dqCUh1ksLOTQs6AttYRV/xWC/k99Ru3x5hRFJMU8O"  # for M002@123
-# merchant_id = "M002 - Merchant B"
-#
-# # Optional: choose which column identifies a merchant in the CSV
 # merchant_id_col = "Merchant Number - Business Name"  # or "Device Serial"
+#
+# [users."DS-0001"]
+# name = "Store A"
+# email = "storea@example.com"
+# password_hash = "<bcrypt-hash>"
+# merchant_id = "DS-0001"
 
 users_cfg = st.secrets.get("users", {})
 cookie_key = st.secrets.get("COOKIE_KEY", "change-me")
@@ -56,7 +109,6 @@ authenticator = stauth.Authenticate(
     key=cookie_key,
     cookie_expiry_days=7,
 )
-
 authenticator.login(location="main")
 
 auth_status = st.session_state.get("authentication_status")
@@ -94,7 +146,7 @@ if not merchant_rec or "merchant_id" not in merchant_rec:
 merchant_id_value = merchant_rec["merchant_id"]
 
 # =========================
-# Load & prepare data
+# Load & prep data
 # =========================
 @st.cache_data(ttl=60)
 def load_transactions():
@@ -116,85 +168,59 @@ required_cols = {
     MERCHANT_ID_COL,
     "Transaction Date", "Request Amount", "Settle Amount",
     "Transaction Type", "Auth Code", "Decline Reason", "Date Payment Extract",
-    "Terminal ID", "Device Serial", "Product Type", "Issuing Bank", "BIN", "Pos Entry Mode"
+    "Terminal ID", "Device Serial", "Product Type", "Issuing Bank", "BIN"
 }
 missing = required_cols - set(tx.columns)
 if missing:
     st.error(f"Missing required column(s) in CSV: {', '.join(sorted(missing))}")
     st.stop()
 
-# Types & cleaning
+# Clean types
 tx[MERCHANT_ID_COL] = tx[MERCHANT_ID_COL].astype(str).str.strip()
 tx["Transaction Date"] = pd.to_datetime(tx["Transaction Date"], errors="coerce")
 tx["Request Amount"] = pd.to_numeric(tx["Request Amount"], errors="coerce")
 tx["Settle Amount"] = pd.to_numeric(tx["Settle Amount"], errors="coerce")
 tx["Date Payment Extract"] = tx["Date Payment Extract"].astype(str).fillna("")
-
-for c in ["Product Type", "Issuing Bank", "Decline Reason", "Pos Entry Mode", "Terminal ID", "Device Serial"]:
+for c in ["Product Type", "Issuing Bank", "Decline Reason", "Terminal ID", "Device Serial"]:
     tx[c] = tx[c].astype(str).fillna("")
 
-# Filter to this merchant first (RLS analogue)
-merchant_tx = tx[tx[MERCHANT_ID_COL] == merchant_id_value].copy()
-if merchant_tx.empty:
+# Merchant slice
+f0 = tx[tx[MERCHANT_ID_COL] == merchant_id_value].copy()
+if f0.empty:
     st.warning(
-        f"No transactions found for merchant value '{merchant_id_value}' in column '{MERCHANT_ID_COL}'.\n"
-        "Check that your Secrets 'merchant_id' matches CSV values (exact case & spaces)."
+        f"No transactions found for '{merchant_id_value}' in column '{MERCHANT_ID_COL}'. "
+        "Check Secrets → merchant_id."
     )
     st.stop()
 
-# =========================
-# Derived flags & business logic
-# =========================
-def is_purchase(s: pd.Series) -> pd.Series:
-    return s.str.lower().eq("purchase")
-
-def is_refund(s: pd.Series) -> pd.Series:
-    return s.str.lower().eq("refund")
-
-def is_reversal(s: pd.Series) -> pd.Series:
-    return s.str.lower().eq("reversal")
+# Flags
+def is_purchase(s): return s.str.lower().eq("purchase")
+def is_refund(s): return s.str.lower().eq("refund")
+def is_reversal(s): return s.str.lower().eq("reversal")
 
 def approved_mask(df: pd.DataFrame) -> pd.Series:
-    # Treat "00 - Approved or completed successfully" OR presence of Auth Code as approved
     dr = df["Decline Reason"].str.strip()
     return dr.str.startswith("00") | (df["Auth Code"].astype(str).str.len() > 0)
 
 def settled_mask(df: pd.DataFrame) -> pd.Series:
-    # Settled if a payment extract date exists AND Settle Amount != 0
     has_extract = df["Date Payment Extract"].str.len() > 0
     nonzero = df["Settle Amount"].fillna(0) != 0
     return has_extract & nonzero
 
-merchant_tx["is_purchase"] = is_purchase(merchant_tx["Transaction Type"])
-merchant_tx["is_refund"] = is_refund(merchant_tx["Transaction Type"])
-merchant_tx["is_reversal"] = is_reversal(merchant_tx["Transaction Type"])
-
-merchant_tx["is_approved"] = approved_mask(merchant_tx)
-merchant_tx["is_settled"] = settled_mask(merchant_tx)
-
-# Attempts: all purchase attempts (approved + declined)
-attempts_mask = merchant_tx["is_purchase"]
-
-# Approved/Declined within purchase attempts
-approved_purchases = attempts_mask & merchant_tx["is_approved"]
-declined_purchases = attempts_mask & (~merchant_tx["is_approved"])
-
-# Settled purchases only (exclude refunds)
-settled_purchases = attempts_mask & merchant_tx["is_settled"]
+f0["is_purchase"] = is_purchase(f0["Transaction Type"])
+f0["is_refund"] = is_refund(f0["Transaction Type"])
+f0["is_reversal"] = is_reversal(f0["Transaction Type"])
+f0["is_approved"] = approved_mask(f0)
+f0["is_settled"] = settled_mask(f0)
 
 # =========================
-# Sidebar filters
+# Sidebar filters (POS Entry Mode removed as requested)
 # =========================
 st.sidebar.subheader("Filters")
 
-min_d = pd.to_datetime(merchant_tx["Transaction Date"].min()).date()
-max_d = pd.to_datetime(merchant_tx["Transaction Date"].max()).date()
-date_range = st.sidebar.date_input(
-    "Date range",
-    value=(min_d, max_d),
-    min_value=min_d,
-    max_value=max_d,
-)
+min_d = pd.to_datetime(f0["Transaction Date"].min()).date()
+max_d = pd.to_datetime(f0["Transaction Date"].max()).date()
+date_range = st.sidebar.date_input("Date range", value=(min_d, max_d), min_value=min_d, max_value=max_d)
 if isinstance(date_range, tuple):
     start_date, end_date = date_range
 else:
@@ -205,192 +231,198 @@ def _multi(label, series, sort=True):
     sel = st.sidebar.multiselect(label, options=opts, default=opts)
     return sel
 
-sel_declines = _multi("Decline Reason", merchant_tx["Decline Reason"])
-sel_prodtype = _multi("Product Type", merchant_tx["Product Type"])
-sel_issuer = _multi("Issuing Bank", merchant_tx["Issuing Bank"])
-sel_pos = _multi("POS Entry Mode", merchant_tx["Pos Entry Mode"])
+sel_declines = _multi("Decline Reason", f0["Decline Reason"])
+sel_prodtype = _multi("Product Type", f0["Product Type"])
+sel_issuer   = _multi("Issuing Bank", f0["Issuing Bank"])
 
-# Apply filters (date first)
-flt = (merchant_tx["Transaction Date"].dt.date >= start_date) & (merchant_tx["Transaction Date"].dt.date <= end_date)
-flt &= merchant_tx["Decline Reason"].isin(sel_declines)
-flt &= merchant_tx["Product Type"].isin(sel_prodtype)
-flt &= merchant_tx["Issuing Bank"].isin(sel_issuer)
-flt &= merchant_tx["Pos Entry Mode"].isin(sel_pos)
+flt = (f0["Transaction Date"].dt.date >= start_date) & (f0["Transaction Date"].dt.date <= end_date)
+flt &= f0["Decline Reason"].isin(sel_declines)
+flt &= f0["Product Type"].isin(sel_prodtype)
+flt &= f0["Issuing Bank"].isin(sel_issuer)
 
-f = merchant_tx[flt].copy()
-
-attempts_mask_f = f["is_purchase"]
-approved_purchases_f = attempts_mask_f & f["is_approved"]
-declined_purchases_f = attempts_mask_f & (~f["is_approved"])
-settled_purchases_f  = attempts_mask_f & f["is_settled"]
-refunds_f            = f["is_refund"]
+f = f0[flt].copy()
 
 # =========================
-# Top KPIs
+# Metrics
 # =========================
-def safe_div(n, d):
-    return (n / d) if d else np.nan
+def safe_div(n, d): return (n / d) if d else np.nan
 
-gross_requests = float(f.loc[attempts_mask_f, "Request Amount"].sum())
-net_settled    = float(f.loc[settled_purchases_f, "Settle Amount"].sum())
-attempts_cnt   = int(attempts_mask_f.sum())
-approved_cnt   = int(approved_purchases_f.sum())
-declined_cnt   = int(declined_purchases_f.sum())
-settled_cnt    = int(settled_purchases_f.sum())
+attempts_mask = f["is_purchase"]
+approved_purchases = attempts_mask & f["is_approved"]
+declined_purchases = attempts_mask & (~f["is_approved"])
+settled_purchases  = attempts_mask & f["is_settled"]
+refunds_f          = f["is_refund"]
+
+gross_requests = float(f.loc[attempts_mask, "Request Amount"].sum())
+net_settled    = float(f.loc[settled_purchases, "Settle Amount"].sum())
+attempts_cnt   = int(attempts_mask.sum())
+approved_cnt   = int(approved_purchases.sum())
+declined_cnt   = int(declined_purchases.sum())
+settled_cnt    = int(settled_purchases.sum())
 approval_rate  = safe_div(approved_cnt, attempts_cnt)
 decline_rate   = safe_div(declined_cnt, attempts_cnt)
-aov_settled    = safe_div(net_settled, settled_cnt)  # Average Order Value (settled only)
+aov_settled    = safe_div(net_settled, settled_cnt)
 refund_total   = float(f.loc[refunds_f, "Settle Amount"].sum())
 
-st.title("📊 Merchant Dashboard")
-st.caption(f"Merchant: **{merchant_id_value}**  •  Source: `{f['__path__'].iat[0]}`  •  Date: {start_date} → {end_date}")
+# KPI cards
+def kpi_card(title: str, value: str, sub: str = ""):
+    st.markdown(
+        f"""
+        <div class="kpi-card">
+            <div class="kpi-title">{title}</div>
+            <div class="kpi-value">{value}</div>
+            <div class="kpi-sub">{sub}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-k1, k2, k3, k4, k5, k6 = st.columns(6)
-k1.metric("Gross Requests", f"R {gross_requests:,.0f}")
-k2.metric("Net Settled", f"R {net_settled:,.0f}")
-k3.metric("# Attempts", f"{attempts_cnt:,}")
-k4.metric("Approval Rate", f"{(approval_rate*100):.1f}%" if not math.isnan(approval_rate) else "—")
-k5.metric("Decline Rate", f"{(decline_rate*100):.1f}%" if not math.isnan(decline_rate) else "—")
-k6.metric("Average Order Value (AOV)", f"R {aov_settled:,.2f}" if not math.isnan(aov_settled) else "—")
+st.markdown(f"### 📊 Merchant Dashboard")
+st.caption(f"Merchant: **{merchant_id_value}** • Date: {start_date} → {end_date}")
+
+st.markdown('<div class="kpi-grid">', unsafe_allow_html=True)
+kpi_card("Gross Requests", f"R {gross_requests:,.0f}")
+kpi_card("Net Settled", f"R {net_settled:,.0f}")
+kpi_card("# Attempts", f"{attempts_cnt:,}")
+kpi_card("Approval Rate", f"{(approval_rate*100):.1f}%" if not math.isnan(approval_rate) else "—")
+kpi_card("Decline Rate", f"{(decline_rate*100):.1f}%" if not math.isnan(decline_rate) else "—")
+kpi_card("Average Order Value (AOV)", f"R {aov_settled:,.2f}" if not math.isnan(aov_settled) else "—")
+st.markdown('</div>', unsafe_allow_html=True)
 
 if refund_total:
-    st.caption(f"Refunds in range: **R {refund_total:,.0f}** (shown separately, excluded from AOV/Net Settled KPIs).")
+    st.caption(f"Refunds in range (excluded from KPIs): **R {refund_total:,.0f}**")
 
 # =========================
-# Trends
+# Row: Trends (left) + Issuing Bank Pie (right)
 # =========================
-st.subheader("Trends")
+c1, c2 = st.columns((2,1), gap="small")
 
-# Daily aggregates (purchases only)
-df_day = (
-    f.loc[attempts_mask_f, ["Transaction Date", "Request Amount", "Settle Amount", "is_approved", "is_settled"]]
-    .assign(date=lambda d: d["Transaction Date"].dt.date)
-    .groupby("date", as_index=False)
-    .agg(
-        attempts=("Request Amount", "count"),
-        approved=("is_approved", "sum"),
-        settled=("is_settled", "sum"),
-        net_settled=("Settle Amount", "sum"),
+with c1:
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.subheader("Daily Net Settled & Approval Rate")
+    df_day = (
+        f.loc[attempts_mask, ["Transaction Date", "Settle Amount", "is_approved", "is_settled"]]
+         .assign(date=lambda d: d["Transaction Date"].dt.date)
+         .groupby("date", as_index=False)
+         .agg(
+             attempts=("is_settled", "count"),
+             approved=("is_approved", "sum"),
+             net_settled=("Settle Amount", "sum"),
+         )
     )
-)
-if not df_day.empty:
-    df_day["approval_rate"] = df_day.apply(lambda r: safe_div(r["approved"], r["attempts"]), axis=1)
+    if not df_day.empty:
+        df_day["approval_rate"] = df_day.apply(lambda r: safe_div(r["approved"], r["attempts"]), axis=1)
+        fig1 = go.Figure()
+        fig1.add_trace(go.Bar(x=df_day["date"], y=df_day["net_settled"], name="Net Settled", marker_color=PRIMARY, opacity=0.75))
+        fig1.add_trace(go.Scatter(x=df_day["date"], y=df_day["approval_rate"], yaxis="y2", name="Approval Rate", mode="lines+markers"))
+        fig1.update_layout(
+            template="plotly_white",
+            margin=dict(l=10, r=10, t=30, b=10),
+            yaxis_title="Net Settled",
+            yaxis2=dict(title="Approval Rate", overlaying="y", side="right", tickformat=".0%"),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        )
+        st.plotly_chart(fig1, use_container_width=True)
+    else:
+        st.info("No purchase attempts in the selected period.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    # Net settled line
-    fig1 = px.line(df_day, x="date", y="net_settled", title="Daily Net Settled")
-    st.plotly_chart(fig1, use_container_width=True)
-
-    # Approval rate line
-    fig2 = px.line(df_day, x="date", y="approval_rate", title="Daily Approval Rate")
-    fig2.update_yaxes(tickformat=".0%")
-    st.plotly_chart(fig2, use_container_width=True)
-else:
-    st.info("No purchase attempts in the selected period.")
-
-# =========================
-# Funnel (Attempts → Approved → Settled)
-# =========================
-st.subheader("Payments Funnel")
-funnel_vals = [attempts_cnt, approved_cnt, settled_cnt]
-funnel_labels = ["Attempts", "Approved", "Settled"]
-fig_funnel = go.Figure(go.Funnel(y=funnel_labels, x=funnel_vals))
-st.plotly_chart(fig_funnel, use_container_width=True)
-
-# =========================
-# Declines by reason
-# =========================
-st.subheader("Top Decline Reasons")
-decl_df = (
-    f.loc[declined_purchases_f, ["Decline Reason"]]
-    .value_counts()
-    .reset_index(name="count")
-    .rename(columns={"index": "Decline Reason"})
-    .sort_values("count", ascending=True)
-)
-if decl_df.empty:
-    st.write("No declines in the selected period.")
-else:
-    fig_decl = px.bar(decl_df, x="count", y="Decline Reason", orientation="h", title="Declines by Reason")
-    st.plotly_chart(fig_decl, use_container_width=True)
-
-# =========================
-# Issuer mix (volume vs approval)
-# =========================
-st.subheader("Issuing Bank — Volume vs Approval")
-issuer_df = (
-    f.loc[attempts_mask_f, ["Issuing Bank", "Request Amount", "is_approved", "is_settled", "Settle Amount"]]
-    .groupby("Issuing Bank", as_index=False)
-    .agg(
-        attempts=("Request Amount", "count"),
-        approved=("is_approved", "sum"),
-        net_settled=("Settle Amount", "sum"),
+with c2:
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.subheader("Issuing Bank Mix (Net Settled)")
+    issuer_df = (
+        f.loc[settled_purchases, ["Issuing Bank", "Settle Amount"]]
+         .groupby("Issuing Bank", as_index=False)
+         .agg(net_settled=("Settle Amount", "sum"))
+         .sort_values("net_settled", ascending=False)
     )
-)
-if not issuer_df.empty:
-    issuer_df["approval_rate"] = issuer_df.apply(lambda r: safe_div(r["approved"], r["attempts"]), axis=1)
-    fig_ib = px.scatter(
-        issuer_df,
-        x="approval_rate", y="net_settled", size="attempts", hover_name="Issuing Bank",
-        title="Issuing Bank: Approval Rate vs Net Settled (bubble size = attempts)"
-    )
-    fig_ib.update_xaxes(tickformat=".0%")
-    st.plotly_chart(fig_ib, use_container_width=True)
+    if not issuer_df.empty:
+        fig_pie = px.pie(
+            issuer_df, values="net_settled", names="Issuing Bank",
+            hole=0.45, title="", template="plotly_white",
+        )
+        # green + grey palette
+        fig_pie.update_traces(texttemplate="%{label}<br>%{percent:.0%}", textposition="inside")
+        st.plotly_chart(fig_pie, use_container_width=True)
+    else:
+        st.info("No settled revenue in range.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # =========================
-# Device reliability (by Terminal or Device Serial)
+# Row: Top Decline Reasons (left) + Devices Decline Rate (right)
 # =========================
-st.subheader("Devices (Decline Rate)")
-by_dev = (
-    f.loc[attempts_mask_f, ["Terminal ID", "Device Serial", "is_approved"]]
-    .assign(attempt=1)
-    .groupby(["Device Serial", "Terminal ID"], as_index=False)
-    .agg(
-        attempts=("attempt", "sum"),
-        approved=("is_approved", "sum"),
+c3, c4 = st.columns(2, gap="small")
+
+with c3:
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.subheader("Top Decline Reasons (as % of Attempts)")
+    # compute against attempts to give a stable denominator
+    base_attempts = int(attempts_mask.sum())
+    decl_df = (
+        f.loc[declined_purchases, ["Decline Reason"]]
+         .value_counts()
+         .reset_index(name="count")
+         .rename(columns={"index": "Decline Reason"})
+         .sort_values("count", ascending=True)
     )
-)
-if not by_dev.empty:
-    by_dev["decline_rate"] = 1 - by_dev.apply(lambda r: safe_div(r["approved"], r["attempts"]), axis=1)
-    by_dev = by_dev.sort_values("decline_rate", ascending=False).head(15)
-    fig_dev = px.bar(
-        by_dev,
-        x="decline_rate", y="Terminal ID",
-        hover_data=["Device Serial", "attempts", "approved"],
-        orientation="h",
-        title="Top Devices by Decline Rate (worst 15)"
+    if not decl_df.empty and base_attempts > 0:
+        decl_df["pct_of_attempts"] = decl_df["count"] / base_attempts
+        fig_decl = px.bar(
+            decl_df, x="pct_of_attempts", y="Decline Reason",
+            orientation="h", template="plotly_white",
+        )
+        fig_decl.update_layout(margin=dict(l=10, r=10, t=20, b=10))
+        fig_decl.update_xaxes(tickformat=".0%")
+        fig_decl.update_traces(marker_color="#94a3b8", texttemplate="%{x:.0%}", textposition="outside")
+        st.plotly_chart(fig_decl, use_container_width=True)
+    else:
+        st.info("No declines in the selected period.")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+with c4:
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.subheader("Top Devices by Decline Rate (worst 10)")
+    by_dev = (
+        f.loc[attempts_mask, ["Device Serial", "Terminal ID", "is_approved"]]
+         .assign(attempt=1)
+         .groupby(["Device Serial", "Terminal ID"], as_index=False)
+         .agg(attempts=("attempt", "sum"), approved=("is_approved", "sum"))
     )
-    fig_dev.update_xaxes(tickformat=".0%")
-    st.plotly_chart(fig_dev, use_container_width=True)
+    if not by_dev.empty:
+        by_dev["decline_rate"] = 1 - by_dev.apply(lambda r: safe_div(r["approved"], r["attempts"]), axis=1)
+        by_dev = by_dev.sort_values("decline_rate", ascending=False).head(10)
+        # Make labels more legible: show DeviceSerial – Terminal
+        by_dev["DeviceLabel"] = by_dev["Device Serial"].astype(str) + " — " + by_dev["Terminal ID"].astype(str)
+        fig_dev = px.bar(
+            by_dev, x="decline_rate", y="DeviceLabel",
+            orientation="h", template="plotly_white",
+            hover_data={"attempts": True, "approved": True, "decline_rate": ":.1%"},
+        )
+        fig_dev.update_traces(marker_color="#64748b", texttemplate="%{x:.0%}", textposition="outside")
+        fig_dev.update_xaxes(tickformat=".0%", range=[0, max(0.01, float(by_dev["decline_rate"].max()) * 1.15)])
+        fig_dev.update_layout(margin=dict(l=10, r=10, t=20, b=10))
+        st.plotly_chart(fig_dev, use_container_width=True)
+    else:
+        st.info("No device attempts in the selected period.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # =========================
-# Product mix (Credit/Debit/Unknown)
+# Detail table + download
 # =========================
-st.subheader("Card Product Type Mix")
-mix = (
-    f.loc[attempts_mask_f & f["is_approved"], ["Product Type", "Settle Amount"]]
-    .groupby("Product Type", as_index=False)
-    .agg(net_settled=("Settle Amount", "sum"))
-    .sort_values("net_settled", ascending=False)
-)
-if not mix.empty:
-    fig_mix = px.bar(mix, x="Product Type", y="net_settled", title="Volume by Product Type (Approved/Settled)")
-    st.plotly_chart(fig_mix, use_container_width=True)
-
-# =========================
-# Detail table & export
-# =========================
+st.markdown('<div class="card">', unsafe_allow_html=True)
 st.subheader("Transactions (filtered)")
+
 show_cols = [
     "Transaction Date", "Request Amount", "Settle Amount",
     "Transaction Type", "Decline Reason", "Auth Code",
     "Issuing Bank", "BIN", "Product Type",
-    "Pos Entry Mode", "Terminal ID", "Device Serial",
+    "Terminal ID", "Device Serial",
     "Date Payment Extract", "System Batch Number", "Device Batch Number",
     "System Trace Audit Number", "Retrieval Reference", "UTI", "Online Reference Number",
 ]
 existing_cols = [c for c in show_cols if c in f.columns]
 tbl = f[existing_cols].sort_values("Transaction Date", ascending=False).reset_index(drop=True)
-st.dataframe(tbl, use_container_width=True, height=420)
+st.dataframe(tbl, use_container_width=True, height=440)
 
 @st.cache_data
 def to_csv_bytes(df: pd.DataFrame) -> bytes:
@@ -402,18 +434,18 @@ st.download_button(
     file_name="filtered_transactions.csv",
     mime="text/csv",
 )
+st.markdown('</div>', unsafe_allow_html=True)
 
 # =========================
-# Footer / diagnostics
+# Footnote
 # =========================
-with st.expander("About this dashboard"):
+with st.expander("About the metrics"):
     st.write(
-        f"""
-- **AOV (Average Order Value)** = Net Settled ÷ # Settled (purchases only).
-- **Attempts** = all **Purchase** transactions (approved + declined).
-- **Approved** = Decline Reason starts with **"00"** or Auth Code present.
-- **Settled** = Date Payment Extract present and Settle Amount ≠ 0 (purchases only).
-- **Refunds** shown separately and excluded from AOV / Net Settled KPIs.
-- Merchant identity column: **{MERCHANT_ID_COL}** → value: **{merchant_id_value}**.
+        """
+- **Attempts**: all **Purchase** rows (approved + declined).
+- **Approved**: Decline Reason starts with `"00"` or an Auth Code exists.
+- **Settled**: `Date Payment Extract` present **and** `Settle Amount` ≠ 0 (purchases).
+- **AOV (Average Order Value)**: Net Settled ÷ # Settled (purchases only).
+- **Refunds** are tracked separately and excluded from KPIs.
 """
     )
