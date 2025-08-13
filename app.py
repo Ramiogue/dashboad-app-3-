@@ -46,28 +46,20 @@ st.markdown(
     }}
     .title-left h1 {{ font-size: 1.15rem; margin: 0; color: {TEXT}; }}
 
-    /* KPI row: slim cards in one line (wrap on small screens) */
-    .kpi-grid {{
-        display: grid;
-        grid-auto-flow: column;
-        grid-auto-columns: minmax(160px, 1fr);
-        gap: 10px;
-        overflow-x: auto;
-        padding-bottom: 4px;
-        margin: 0.25rem 0 0.25rem 0;
-    }}
+    /* KPI row: slim cards in one line (wrap only on small screens) */
     .kpi-card {{
         background: {CARD_BG};
         border: 1px solid #e5e7eb;
-        border-left: 6px solid {PRIMARY};
+        border-left: 4px solid {PRIMARY};
         border-radius: 12px;
-        padding: 10px 12px;
+        padding: 8px 10px;              /* smaller padding */
         box-shadow: 0 1px 2px rgba(16,24,40,0.04);
-        min-height: 76px;
+        min-height: 64px;               /* shorter card */
+        height: 100%;
     }}
-    .kpi-title {{ font-size: 0.75rem; color: #6b7280; margin-bottom: 4px; }}
-    .kpi-value {{ font-size: 1.35rem; font-weight: 800; color: {TEXT}; line-height: 1.05; }}
-    .kpi-sub {{ font-size: 0.78rem; color: #6b7280; margin-top: 2px; }}
+    .kpi-title {{ font-size: 0.72rem; color: #6b7280; margin-bottom: 2px; }}
+    .kpi-value {{ font-size: 1.25rem; font-weight: 800; color: {TEXT}; line-height: 1.05; }}
+    .kpi-sub   {{ font-size: 0.75rem; color: #6b7280; margin-top: 2px; }}
 
     .card {{
         background: {CARD_BG};
@@ -86,6 +78,16 @@ st.markdown(
 # =========================
 # Auth (Secrets)
 # =========================
+# Secrets example (TOML):
+# COOKIE_KEY = "replace_with_random_secret"
+# merchant_id_col = "Merchant Number - Business Name"  # or "Device Serial"
+#
+# [users."DS-0001"]
+# name = "Store A"
+# email = "storea@example.com"
+# password_hash = "<bcrypt-hash>"
+# merchant_id = "DS-0001"
+
 users_cfg = st.secrets.get("users", {})
 cookie_key = st.secrets.get("COOKIE_KEY", "change-me")
 MERCHANT_ID_COL = st.secrets.get("merchant_id_col", "Merchant Number - Business Name")
@@ -194,12 +196,11 @@ flt &= f0["Issuing Bank"].isin(sel_issuer)
 f = f0[flt].copy()
 
 # =========================
-# KPIs (single slim row)
+# KPIs (single slim row via st.columns)
 # =========================
 def safe_div(n, d): return (n / d) if d else np.nan
 
-# Your request: “make attempts number of transactions”
-# -> we’ll show **# Transactions** = count of ALL rows (Purchases + Refunds + Reversals) in range
+# Per your request: “# Transactions” = ALL rows (Purchases + Refunds + Reversals)
 transactions_cnt = int(len(f))
 
 # Keep purchase-flow metrics for funnel/ratios
@@ -213,7 +214,7 @@ gross_requests = float(f.loc[attempts_mask, "Request Amount"].sum())
 net_settled    = float(f.loc[settled_purchases, "Settle Amount"].sum())
 settled_cnt    = int(settled_purchases.sum())
 approved_cnt   = int(approved_purchases.sum())
-attempts_cnt   = int(attempts_mask.sum())  # still used for funnel, not shown as KPI anymore
+attempts_cnt   = int(attempts_mask.sum())  # used for funnel
 approval_rate  = safe_div(approved_cnt, attempts_cnt)
 decline_rate   = safe_div(int(declined_purchases.sum()), attempts_cnt)
 aov_settled    = safe_div(net_settled, settled_cnt)
@@ -221,11 +222,10 @@ aov_settled    = safe_div(net_settled, settled_cnt)
 refund_total   = float(f.loc[refunds_f, "Settle Amount"].sum())  # negative
 net_after_ref  = net_settled + refund_total
 
-# Header image (real picture) if present; else plain title
+# Header image (optional)
 header_path = None
 for p in ("assets/header.jpg","assets/header.png","assets/header.jpeg","assets/header.webp"):
-    if os.path.exists(p):
-        header_path = p; break
+    if os.path.exists(p): header_path = p; break
 if header_path:
     st.image(header_path, use_column_width=True)
 else:
@@ -236,22 +236,27 @@ def kpi_card(title, value, sub=""):
     st.markdown(
         f"""
         <div class="kpi-card">
-            <div class="kpi-title">{title}</div>
-            <div class="kpi-value">{value}</div>
-            <div class="kpi-sub">{sub}</div>
+          <div class="kpi-title">{title}</div>
+          <div class="kpi-value">{value}</div>
+          <div class="kpi-sub">{sub}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-st.markdown('<div class="kpi-grid">', unsafe_allow_html=True)
-kpi_card("# Transactions",           f"{transactions_cnt:,}")
-kpi_card("Gross Requests",           f"R {gross_requests:,.0f}")
-kpi_card("Net Settled",              f"R {net_settled:,.0f}")
-kpi_card("Refunds",                  f"R {refund_total:,.0f}", "Negative = money returned")
-kpi_card("Net After Refunds",        f"R {net_after_ref:,.0f}")
-kpi_card("Average Order Value (AOV)",f"R {aov_settled:,.2f}" if not math.isnan(aov_settled) else "—")
-st.markdown('</div>', unsafe_allow_html=True)
+cols = st.columns(6, gap="small")
+with cols[0]:
+    kpi_card("# Transactions", f"{transactions_cnt:,}")
+with cols[1]:
+    kpi_card("Gross Requests", f"R {gross_requests:,.0f}")
+with cols[2]:
+    kpi_card("Net Settled", f"R {net_settled:,.0f}")
+with cols[3]:
+    kpi_card("Refunds", f"R {refund_total:,.0f}", "Negative = money returned")
+with cols[4]:
+    kpi_card("Net After Refunds", f"R {net_after_ref:,.0f}")
+with cols[5]:
+    kpi_card("Average Order Value (AOV)", f"R {aov_settled:,.2f}" if not math.isnan(aov_settled) else "—")
 
 # =========================
 # Row 1: Trend + Approvals  |  Issuing Bank Donut
@@ -261,18 +266,17 @@ c1, c2 = st.columns((2,1), gap="small")
 with c1:
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.markdown("### Daily Net Settled & Approval Rate")
-    df_day = (
-        f.loc[attempts_mask, ["Transaction Date", "Settle Amount", "is_approved", "is_settled"]]
-         .assign(date=lambda d: d["Transaction Date"].dt.date)
-         .groupby("date", as_index=False)
-         .agg(
-             attempts=("is_settled", "count"),
-             approved=("is_approved", "sum"),
-             net_settled=("Settle Amount", "sum"),
-         )
-    )
-    if not df_day.empty:
+    # Daily aggregates over attempts (purchases)
+    df_day_base = f.loc[attempts_mask, ["Transaction Date", "Settle Amount", "is_approved"]].copy()
+    if not df_day_base.empty:
+        df_day_base["date"] = df_day_base["Transaction Date"].dt.date
+        df_day = df_day_base.groupby("date", as_index=False).agg(
+            attempts=("Transaction Date", "count"),
+            approved=("is_approved", "sum"),
+            net_settled=("Settle Amount", "sum"),
+        )
         df_day["approval_rate"] = df_day.apply(lambda r: safe_div(r["approved"], r["attempts"]), axis=1)
+
         fig1 = go.Figure()
         fig1.add_trace(go.Bar(x=df_day["date"], y=df_day["net_settled"], name="Net Settled", marker_color=PRIMARY, opacity=0.85))
         fig1.add_trace(go.Scatter(x=df_day["date"], y=df_day["approval_rate"], yaxis="y2", name="Approval Rate", mode="lines+markers", line=dict(color=GREY_BAR_DARK)))
