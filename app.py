@@ -57,13 +57,12 @@ st.markdown(
         padding: 8px 10px;
         box-shadow: 0 1px 2px rgba(16,24,40,0.04);
 
-        /* SAME HEIGHT FOR ALL */
-        height: 84px;                /* fixed height */
+        height: 84px;                /* fixed height for uniform boxes */
         display: flex;
         flex-direction: column;
         justify-content: center;
         gap: 2px;
-        overflow: hidden;            /* no wrap-induced growth */
+        overflow: hidden;
     }}
     .kpi-title {{ font-size: 0.72rem; color: #6b7280; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
     .kpi-value {{ font-size: 1.25rem; font-weight: 800; color: {TEXT}; line-height: 1.05; margin: 0; }}
@@ -311,34 +310,67 @@ with cols[5]:
     kpi_card("Average Order Value (AOV)", f"R {aov_settled:,.2f}" if not math.isnan(aov_settled) else "—")
 
 # =========================
-# Row 1: Trend + Approvals  |  Issuing Bank Donut
+# NEW: Two separate monthly-faceted line charts
 # =========================
-c1, c2 = st.columns((2,1), gap="small")
+# Build daily metrics for purchases
+df_day = (
+    f.loc[attempts_mask, ["Transaction Date", "Settle Amount", "is_approved"]]
+      .assign(date=lambda d: d["Transaction Date"].dt.date)
+      .groupby("date", as_index=False)
+      .agg(
+          attempts=("Transaction Date", "count"),
+          approved=("is_approved", "sum"),
+          net_settled=("Settle Amount", "sum"),
+      )
+)
 
-with c1:
+if not df_day.empty:
+    df_day["date"] = pd.to_datetime(df_day["date"])
+    df_day["month"] = df_day["date"].dt.to_period("M").dt.strftime("%b %Y")
+    df_day["approval_rate"] = np.where(
+        df_day["attempts"] > 0, df_day["approved"] / df_day["attempts"], np.nan
+    )
+
+    # Chart 1: Net Settled by Day — faceted by month
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("### Daily Net Settled & Approval Rate")
-    df_day_base = f.loc[attempts_mask, ["Transaction Date", "Settle Amount", "is_approved"]].copy()
-    if not df_day_base.empty:
-        df_day_base["date"] = df_day_base["Transaction Date"].dt.date
-        df_day = df_day_base.groupby("date", as_index=False).agg(
-            attempts=("Transaction Date", "count"),
-            approved=("is_approved", "sum"),
-            net_settled=("Settle Amount", "sum"),
-        )
-        df_day["approval_rate"] = df_day.apply(lambda r: safe_div(r["approved"], r["attempts"]), axis=1)
-
-        fig1 = go.Figure()
-        fig1.add_trace(go.Bar(x=df_day["date"], y=df_day["net_settled"], name="Net Settled", marker_color=PRIMARY, opacity=0.85))
-        fig1.add_trace(go.Scatter(x=df_day["date"], y=df_day["approval_rate"], yaxis="y2", name="Approval Rate", mode="lines+markers", line=dict(color=GREY_BAR_DARK)))
-        fig1.update_layout(yaxis_title="Net Settled", yaxis2=dict(title="Approval Rate", overlaying="y", side="right", tickformat=".0%"))
-        apply_plotly_layout(fig1)
-        st.plotly_chart(fig1, use_container_width=True)
-    else:
-        st.info("No purchase attempts in the selected period.")
+    st.markdown("### Net Settled by Day — by Month")
+    fig_ns = px.line(
+        df_day, x="date", y="net_settled",
+        facet_col="month", facet_col_wrap=3, markers=True
+    )
+    fig_ns.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
+    fig_ns.update_yaxes(title_text="Net Settled")
+    fig_ns.update_xaxes(title_text="")
+    fig_ns.update_traces(line=dict(color=PRIMARY))
+    fig_ns.update_layout(title_text="Net Settled by Day (Faceted by Month)")
+    apply_plotly_layout(fig_ns)
+    st.plotly_chart(fig_ns, use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-with c2:
+    # Chart 2: Approval Rate by Day — faceted by month
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown("### Approval Rate by Day — by Month")
+    fig_ar = px.line(
+        df_day, x="date", y="approval_rate",
+        facet_col="month", facet_col_wrap=3, markers=True
+    )
+    fig_ar.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
+    fig_ar.update_yaxes(title_text="Approval Rate", tickformat=".0%")
+    fig_ar.update_xaxes(title_text="")
+    fig_ar.update_traces(line=dict(color=GREY_BAR_DARK))
+    fig_ar.update_layout(title_text="Approval Rate by Day (Faceted by Month)")
+    apply_plotly_layout(fig_ar)
+    st.plotly_chart(fig_ar, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+else:
+    st.info("No purchase attempts in the selected period.")
+
+# =========================
+# Row: Issuing Bank Donut + Top Decline Reasons
+# =========================
+cA, cB = st.columns(2, gap="small")
+
+with cA:
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.markdown("### Issuing Bank Mix (Net Settled)")
     issuer_df = (
@@ -357,32 +389,30 @@ with c2:
         st.info("No settled revenue in range.")
     st.markdown('</div>', unsafe_allow_html=True)
 
-# =========================
-# Row 2: Top Decline Reasons (full width)
-# =========================
-st.markdown('<div class="card">', unsafe_allow_html=True)
-st.markdown("### Top Decline Reasons (as % of Attempts)")
-base_attempts = int(attempts_mask.sum())
-decl_df = (
-    f.loc[attempts_mask & (~f["is_approved"]), ["Decline Reason"]]
-     .value_counts()
-     .reset_index(name="count")
-     .rename(columns={"index": "Decline Reason"})
-     .sort_values("count", ascending=True)
-)
-if not decl_df.empty and base_attempts > 0:
-    decl_df["pct_of_attempts"] = decl_df["count"] / base_attempts
-    fig_decl = px.bar(decl_df, x="pct_of_attempts", y="Decline Reason", orientation="h")
-    fig_decl.update_traces(marker_color=GREY_BAR, texttemplate="%{x:.0%}", textposition="outside")
-    fig_decl.update_xaxes(tickformat=".0%", range=[0, max(0.01, float(decl_df["pct_of_attempts"].max()) * 1.15)])
-    apply_plotly_layout(fig_decl)
-    st.plotly_chart(fig_decl, use_container_width=True)
-else:
-    st.info("No declines in the selected period.")
-st.markdown('</div>', unsafe_allow_html=True)
+with cB:
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown("### Top Decline Reasons (as % of Attempts)")
+    base_attempts = int(attempts_mask.sum())
+    decl_df = (
+        f.loc[attempts_mask & (~f["is_approved"]), ["Decline Reason"]]
+         .value_counts()
+         .reset_index(name="count")
+         .rename(columns={"index": "Decline Reason"})
+         .sort_values("count", ascending=True)
+    )
+    if not decl_df.empty and base_attempts > 0:
+        decl_df["pct_of_attempts"] = decl_df["count"] / base_attempts
+        fig_decl = px.bar(decl_df, x="pct_of_attempts", y="Decline Reason", orientation="h")
+        fig_decl.update_traces(marker_color=GREY_BAR, texttemplate="%{x:.0%}", textposition="outside")
+        fig_decl.update_xaxes(tickformat=".0%", range=[0, max(0.01, float(decl_df["pct_of_attempts"].max()) * 1.15)])
+        apply_plotly_layout(fig_decl)
+        st.plotly_chart(fig_decl, use_container_width=True)
+    else:
+        st.info("No declines in the selected period.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # =========================
-# Row 3: Payments Funnel + Table
+# Row: Payments Funnel + Table
 # =========================
 c5, c6 = st.columns((1,2), gap="small")
 
