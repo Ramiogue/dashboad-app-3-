@@ -112,16 +112,6 @@ st.markdown(
 # =========================
 # Auth (from Secrets)
 # =========================
-# Secrets example (TOML):
-# COOKIE_KEY = "replace_with_random_secret"
-# merchant_id_col = "Merchant Number - Business Name"  # or "Device Serial"
-#
-# [users."DS-0001"]
-# name = "Store A"
-# email = "storea@example.com"
-# password_hash = "<bcrypt-hash>"
-# merchant_id = "DS-0001"
-
 users_cfg = st.secrets.get("users", {})
 cookie_key = st.secrets.get("COOKIE_KEY", "change-me")
 MERCHANT_ID_COL = st.secrets.get("merchant_id_col", "Merchant Number - Business Name")
@@ -148,11 +138,9 @@ name = st.session_state.get("name")
 username = st.session_state.get("username")
 
 if auth_status is False:
-    st.error("Invalid credentials")
-    st.stop()
+    st.error("Invalid credentials"); st.stop()
 elif auth_status is None:
-    st.info("Please log in.")
-    st.stop()
+    st.info("Please log in."); st.stop()
 
 authenticator.logout(location="sidebar")
 st.sidebar.write(f"Hello, **{name}**")
@@ -166,8 +154,7 @@ def get_user_record(cfg: dict, uname: str):
 
 merchant_rec = get_user_record(users_cfg, username)
 if not merchant_rec or "merchant_id" not in merchant_rec:
-    st.error("Merchant mapping not found for this user. Check Secrets for 'merchant_id'.")
-    st.stop()
+    st.error("Merchant mapping not found for this user. Check Secrets for 'merchant_id'."); st.stop()
 merchant_id_value = merchant_rec["merchant_id"]
 
 # =========================
@@ -188,9 +175,7 @@ required_cols = {
     "Terminal ID","Device Serial","Product Type","Issuing Bank","BIN"
 }
 missing = required_cols - set(tx.columns)
-if missing:
-    st.error(f"Missing required column(s): {', '.join(sorted(missing))}")
-    st.stop()
+if missing: st.error(f"Missing required column(s): {', '.join(sorted(missing))}"); st.stop()
 
 tx[MERCHANT_ID_COL] = tx[MERCHANT_ID_COL].astype(str).str.strip()
 tx["Transaction Date"] = pd.to_datetime(tx["Transaction Date"], errors="coerce")
@@ -201,9 +186,7 @@ for c in ["Product Type","Issuing Bank","Decline Reason","Terminal ID","Device S
     tx[c] = tx[c].astype(str).fillna("")
 
 f0 = tx[tx[MERCHANT_ID_COL] == merchant_id_value].copy()
-if f0.empty:
-    st.warning(f"No transactions for '{merchant_id_value}' in '{MERCHANT_ID_COL}'.")
-    st.stop()
+if f0.empty: st.warning(f"No transactions for '{merchant_id_value}' in '{MERCHANT_ID_COL}'."); st.stop()
 
 def is_purchase(s): return s.str.lower().eq("purchase")
 def is_refund(s):  return s.str.lower().eq("refund")
@@ -223,7 +206,7 @@ f0["is_approved"] = approved_mask(f0)
 f0["is_settled"]  = settled_mask(f0)
 
 # =========================
-# Sidebar filters (POS Entry removed)
+# Sidebar filters
 # =========================
 st.sidebar.subheader("Filters")
 min_d = pd.to_datetime(f0["Transaction Date"].min()).date()
@@ -246,33 +229,29 @@ flt &= f0["Issuing Bank"].isin(sel_issuer)
 f = f0[flt].copy()
 
 # =========================
-# KPIs (single row via st.columns, equal heights via CSS above)
+# KPIs
 # =========================
 def safe_div(n, d): return (n / d) if d else np.nan
 
-# “# Transactions” = ALL rows (Purchases + Refunds + Reversals)
-transactions_cnt = int(len(f))
-
-# Purchase-flow metrics (for funnel/ratios)
-attempts_mask     = f["is_purchase"]
-approved_purchases= attempts_mask & f["is_approved"]
-declined_purchases= attempts_mask & (~f["is_approved"])
-settled_purchases = attempts_mask & f["is_settled"]
-refunds_f         = f["is_refund"]
+transactions_cnt   = int(len(f))                       # all rows
+attempts_mask      = f["is_purchase"]
+approved_purchases = attempts_mask & f["is_approved"]
+declined_purchases = attempts_mask & (~f["is_approved"])
+settled_purchases  = attempts_mask & f["is_settled"]
+refunds_f          = f["is_refund"]
 
 gross_requests = float(f.loc[attempts_mask, "Request Amount"].sum())
 net_settled    = float(f.loc[settled_purchases, "Settle Amount"].sum())
 settled_cnt    = int(settled_purchases.sum())
 approved_cnt   = int(approved_purchases.sum())
-attempts_cnt   = int(attempts_mask.sum())  # for funnel only
+attempts_cnt   = int(attempts_mask.sum())
 approval_rate  = safe_div(approved_cnt, attempts_cnt)
 decline_rate   = safe_div(int(declined_purchases.sum()), attempts_cnt)
 aov_settled    = safe_div(net_settled, settled_cnt)
-
 refund_total   = float(f.loc[refunds_f, "Settle Amount"].sum())  # negative
 net_after_ref  = net_settled + refund_total
 
-# Optional header image
+# Header
 header_path = None
 for p in ("assets/header.jpg","assets/header.png","assets/header.jpeg","assets/header.webp"):
     if os.path.exists(p): header_path = p; break
@@ -280,7 +259,6 @@ if header_path:
     st.image(header_path, use_column_width=True)
 else:
     st.markdown('<div class="header-row"><div class="title-left"><h1>Merchant Dashboard</h1></div></div>', unsafe_allow_html=True)
-
 st.caption(f"Merchant: **{merchant_id_value}**  •  Source: `{f['__path__'].iat[0]}`  •  Date: {start_date} → {end_date}")
 
 def kpi_card(title, value, sub=""):
@@ -291,9 +269,7 @@ def kpi_card(title, value, sub=""):
           <div class="kpi-value">{value}</div>
           <div class="kpi-sub">{sub}</div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        """, unsafe_allow_html=True)
 
 cols = st.columns(6, gap="small")
 with cols[0]:
@@ -310,60 +286,40 @@ with cols[5]:
     kpi_card("Average Order Value (AOV)", f"R {aov_settled:,.2f}" if not math.isnan(aov_settled) else "—")
 
 # =========================
-# NEW: Two separate monthly-faceted line charts
+# Net Settled per Month (simple and clean)
 # =========================
-# Build daily metrics for purchases
-df_day = (
-    f.loc[attempts_mask, ["Transaction Date", "Settle Amount", "is_approved"]]
-      .assign(date=lambda d: d["Transaction Date"].dt.date)
-      .groupby("date", as_index=False)
-      .agg(
-          attempts=("Transaction Date", "count"),
-          approved=("is_approved", "sum"),
-          net_settled=("Settle Amount", "sum"),
-      )
+st.markdown('<div class="card">', unsafe_allow_html=True)
+st.markdown("### Net Settled per Month")
+
+# Only settled purchases contribute to revenue
+df_month = (
+    f.loc[settled_purchases, ["Transaction Date", "Settle Amount"]]
+      .assign(month_start=lambda d: pd.to_datetime(d["Transaction Date"]).dt.to_period("M").dt.to_timestamp())
+      .groupby("month_start", as_index=False)
+      .agg(net_settled=("Settle Amount", "sum"))
+      .sort_values("month_start")
 )
 
-if not df_day.empty:
-    df_day["date"] = pd.to_datetime(df_day["date"])
-    df_day["month"] = df_day["date"].dt.to_period("M").dt.strftime("%b %Y")
-    df_day["approval_rate"] = np.where(
-        df_day["attempts"] > 0, df_day["approved"] / df_day["attempts"], np.nan
-    )
+if not df_month.empty:
+    df_month["month_label"] = df_month["month_start"].dt.strftime("%b %Y")
+    fig_m = px.bar(df_month, x="month_label", y="net_settled")
+    fig_m.update_traces(marker_color=PRIMARY)
+    fig_m.update_yaxes(title_text="Net Settled")
+    fig_m.update_xaxes(title_text="")
+    fig_m.update_layout(title_text="Net Settled per Month")
+    apply_plotly_layout(fig_m)
+    st.plotly_chart(fig_m, use_container_width=True)
 
-    # Chart 1: Net Settled by Day — faceted by month
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("### Net Settled by Day — by Month")
-    fig_ns = px.line(
-        df_day, x="date", y="net_settled",
-        facet_col="month", facet_col_wrap=3, markers=True
+    # Optional: tiny monthly summary table
+    st.dataframe(
+        df_month[["month_label", "net_settled"]]
+            .rename(columns={"month_label": "Month", "net_settled": "Net Settled"})
+            .reset_index(drop=True),
+        use_container_width=True, height=220
     )
-    fig_ns.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
-    fig_ns.update_yaxes(title_text="Net Settled")
-    fig_ns.update_xaxes(title_text="")
-    fig_ns.update_traces(line=dict(color=PRIMARY))
-    fig_ns.update_layout(title_text="Net Settled by Day (Faceted by Month)")
-    apply_plotly_layout(fig_ns)
-    st.plotly_chart(fig_ns, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # Chart 2: Approval Rate by Day — faceted by month
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("### Approval Rate by Day — by Month")
-    fig_ar = px.line(
-        df_day, x="date", y="approval_rate",
-        facet_col="month", facet_col_wrap=3, markers=True
-    )
-    fig_ar.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
-    fig_ar.update_yaxes(title_text="Approval Rate", tickformat=".0%")
-    fig_ar.update_xaxes(title_text="")
-    fig_ar.update_traces(line=dict(color=GREY_BAR_DARK))
-    fig_ar.update_layout(title_text="Approval Rate by Day (Faceted by Month)")
-    apply_plotly_layout(fig_ar)
-    st.plotly_chart(fig_ar, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
 else:
-    st.info("No purchase attempts in the selected period.")
+    st.info("No settled revenue in the selected period.")
+st.markdown('</div>', unsafe_allow_html=True)
 
 # =========================
 # Row: Issuing Bank Donut + Top Decline Reasons
