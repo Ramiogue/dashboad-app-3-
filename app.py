@@ -286,7 +286,7 @@ with cols[5]:
     kpi_card("Average Order Value (AOV)", f"R {aov_settled:,.2f}" if not math.isnan(aov_settled) else "—")
 
 # =========================
-# Net Settled per Month (simple and clean)
+# Net Settled per Month — LINE chart
 # =========================
 st.markdown('<div class="card">', unsafe_allow_html=True)
 st.markdown("### Net Settled per Month")
@@ -301,16 +301,28 @@ df_month = (
 )
 
 if not df_month.empty:
+    # Ensure continuous months (fill missing with 0) so the line doesn't break
+    full_months = pd.date_range(df_month["month_start"].min(),
+                                df_month["month_start"].max(),
+                                freq="MS")
+    df_month = (
+        df_month.set_index("month_start")
+                .reindex(full_months, fill_value=0)
+                .rename_axis("month_start")
+                .reset_index()
+    )
     df_month["month_label"] = df_month["month_start"].dt.strftime("%b %Y")
-    fig_m = px.bar(df_month, x="month_label", y="net_settled")
-    fig_m.update_traces(marker_color=PRIMARY)
+
+    # Line chart with markers
+    fig_m = px.line(df_month, x="month_start", y="net_settled", markers=True)
+    fig_m.update_traces(line=dict(color=PRIMARY, width=2))
+    fig_m.update_xaxes(title_text="", tickformat="%b %Y", dtick="M1")
     fig_m.update_yaxes(title_text="Net Settled")
-    fig_m.update_xaxes(title_text="")
-    fig_m.update_layout(title_text="Net Settled per Month")
+    fig_m.update_layout(title_text="Net Settled per Month (Line)")
     apply_plotly_layout(fig_m)
     st.plotly_chart(fig_m, use_container_width=True)
 
-    # Optional: tiny monthly summary table
+    # Optional summary table
     st.dataframe(
         df_month[["month_label", "net_settled"]]
             .rename(columns={"month_label": "Month", "net_settled": "Net Settled"})
