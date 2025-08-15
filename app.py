@@ -112,16 +112,6 @@ st.markdown(
 # =========================
 # Auth (from Secrets)
 # =========================
-# Secrets example (TOML):
-# COOKIE_KEY = "replace_with_random_secret"
-# merchant_id_col = "Device Serial"  # or "Merchant Number - Business Name"
-#
-# [users."DS-0001"]
-# name = "Store A"
-# email = "storea@example.com"
-# password_hash = "<bcrypt-hash>"
-# merchant_id = "DS-0001"
-
 users_cfg = st.secrets.get("users", {})
 cookie_key = st.secrets.get("COOKIE_KEY", "change-me")
 MERCHANT_ID_COL = st.secrets.get("merchant_id_col", "Merchant Number - Business Name")
@@ -137,7 +127,6 @@ authenticator = stauth.Authenticate(
     cookie_expiry_days=7,
 )
 
-# Optional: put login inside a card for a cleaner frame
 with st.container():
     st.markdown('<div class="card">', unsafe_allow_html=True)
     authenticator.login(location="main")
@@ -148,11 +137,9 @@ name = st.session_state.get("name")
 username = st.session_state.get("username")
 
 if auth_status is False:
-    st.error("Invalid credentials")
-    st.stop()
+    st.error("Invalid credentials"); st.stop()
 elif auth_status is None:
-    st.info("Please log in.")
-    st.stop()
+    st.info("Please log in."); st.stop()
 
 authenticator.logout(location="sidebar")
 st.sidebar.write(f"Hello, **{name}**")
@@ -166,8 +153,7 @@ def get_user_record(cfg: dict, uname: str):
 
 merchant_rec = get_user_record(users_cfg, username)
 if not merchant_rec or "merchant_id" not in merchant_rec:
-    st.error("Merchant mapping not found for this user. Check Secrets for 'merchant_id'.")
-    st.stop()
+    st.error("Merchant mapping not found for this user. Check Secrets for 'merchant_id'."); st.stop()
 merchant_id_value = merchant_rec["merchant_id"]
 
 # =========================
@@ -188,25 +174,23 @@ required_cols = {
     "Terminal ID","Device Serial","Product Type","Issuing Bank","BIN"
 }
 missing = required_cols - set(tx.columns)
-if missing:
-    st.error(f"Missing required column(s): {', '.join(sorted(missing))}")
-    st.stop()
+if missing: st.error(f"Missing required column(s): {', '.join(sorted(missing))}"); st.stop()
 
-# Basic cleaning (no reliance on Transaction Type)
+# Clean
 tx[MERCHANT_ID_COL] = tx[MERCHANT_ID_COL].astype(str).str.strip()
 tx["Transaction Date"] = pd.to_datetime(tx["Transaction Date"], errors="coerce")
-tx["Request Amount"] = pd.to_numeric(tx["Request Amount"], errors="coerce")
-tx["Settle Amount"] = pd.to_numeric(tx["Settle Amount"], errors="coerce")
+tx["Request Amount"]   = pd.to_numeric(tx["Request Amount"], errors="coerce")
+tx["Settle Amount"]    = pd.to_numeric(tx["Settle Amount"], errors="coerce")
 tx["Date Payment Extract"] = tx["Date Payment Extract"].astype(str).fillna("")
 for c in ["Product Type","Issuing Bank","Decline Reason","Terminal ID","Device Serial","Auth Code"]:
     tx[c] = tx[c].astype(str).fillna("")
+# Normalise empty product type
+tx.loc[tx["Product Type"].str.strip().eq(""), "Product Type"] = "Unknown"
 
 f0 = tx[tx[MERCHANT_ID_COL] == merchant_id_value].copy()
-if f0.empty:
-    st.warning(f"No transactions for '{merchant_id_value}' in '{MERCHANT_ID_COL}'.")
-    st.stop()
+if f0.empty: st.warning(f"No transactions for '{merchant_id_value}' in '{MERCHANT_ID_COL}'."); st.stop()
 
-# Approval & Settlement (independent of Transaction Type)
+# Approval & Settlement flags
 def approved_mask(df):
     dr = df["Decline Reason"].astype(str).str.strip()
     return dr.str.startswith("00") | (df["Auth Code"].astype(str).str.len() > 0)
@@ -247,19 +231,20 @@ f = f0[flt].copy()
 # =========================
 def safe_div(n, d): return (n / d) if d else np.nan
 
-transactions_cnt   = int(len(f))                       # all rows
-attempts_cnt       = int(len(f))                       # treat all as attempts
-approved_cnt       = int(f["is_approved"].sum())
-approval_rate      = safe_div(approved_cnt, attempts_cnt)
-decline_rate       = safe_div(attempts_cnt - approved_cnt, attempts_cnt)
+transactions_cnt = int(len(f))                    # all rows
+attempts_cnt     = int(len(f))                    # treat all as attempts
+approved_cnt     = int(f["is_approved"].sum())
+approval_rate    = safe_div(approved_cnt, attempts_cnt)
+decline_rate     = safe_div(attempts_cnt - approved_cnt, attempts_cnt)
 
-# Revenue = sum of settled Settle Amount
 settled_rows = f["is_settled"]
 revenue      = float(f.loc[settled_rows, "Settle Amount"].sum())
 settled_cnt  = int(settled_rows.sum())
 aov          = safe_div(revenue, settled_cnt)
 
+# =========================
 # Header
+# =========================
 header_path = None
 for p in ("assets/header.jpg","assets/header.png","assets/header.jpeg","assets/header.webp"):
     if os.path.exists(p): header_path = p; break
@@ -338,7 +323,7 @@ else:
 st.markdown('</div>', unsafe_allow_html=True)
 
 # =========================
-# Row: Issuing Bank Mix + Decline Reasons / Product Type Mix (tabs)
+# Row: Issuing Bank Mix + Declines/Product Mix (tabs)
 # =========================
 cA, cB = st.columns(2, gap="small")
 
@@ -369,10 +354,10 @@ with cB:
     with tab_decl:
         base_attempts = int(len(f))  # treat all rows as attempts
         decl_df = (
-            f.loc[~f["is_approved"], ["Decline Reason"]]
+            f.loc[~f["is_approved"], "Decline Reason"]
              .value_counts()
-             .reset_index(name="count")
-             .rename(columns={"index": "Decline Reason"})
+             .reset_index()
+             .rename(columns={"index": "Decline Reason", "Decline Reason": "count"})
              .sort_values("count", ascending=True)
         )
         if not decl_df.empty and base_attempts > 0:
@@ -386,7 +371,6 @@ with cB:
             st.info("No declines in the selected period.")
 
     with tab_mix:
-        # Stacked monthly area for Product Type (Revenue only)
         mix_df = (
             f.loc[settled_rows, ["Transaction Date", "Settle Amount", "Product Type"]]
              .assign(month_start=lambda d: pd.to_datetime(d["Transaction Date"]).dt.to_period("M").dt.to_timestamp())
@@ -395,18 +379,17 @@ with cB:
              .sort_values("month_start")
         )
         if not mix_df.empty:
-            # Ensure continuous months across all product types (fill missing with 0)
+            # Ensure continuous months across all product types
             all_months = pd.date_range(mix_df["month_start"].min(), mix_df["month_start"].max(), freq="MS")
             all_products = sorted(mix_df["Product Type"].unique().tolist())
-            complete_index = pd.MultiIndex.from_product([all_months, all_products], names=["month_start", "Product Type"])
+            idx = pd.MultiIndex.from_product([all_months, all_products], names=["month_start", "Product Type"])
             mix_df = (
                 mix_df.set_index(["month_start", "Product Type"])
-                      .reindex(complete_index, fill_value=0)
+                      .reindex(idx, fill_value=0)
                       .reset_index()
             )
             fig_mix = px.area(
-                mix_df, x="month_start", y="revenue", color="Product Type",
-                groupnorm=None
+                mix_df, x="month_start", y="revenue", color="Product Type"
             )
             fig_mix.update_xaxes(title_text="", tickformat="%b %Y", dtick="M1")
             fig_mix.update_yaxes(title_text="Revenue")
@@ -431,7 +414,7 @@ show_cols = [
     "System Trace Audit Number", "Retrieval Reference", "UTI", "Online Reference Number",
 ]
 existing_cols = [c for c in show_cols if c in f.columns]
-tbl = f[existing_cols].sort_values("Transaction Date", descending=False).reset_index(drop=True)
+tbl = f[existing_cols].sort_values("Transaction Date", ascending=False).reset_index(drop=True)  # <-- fixed
 st.dataframe(tbl, use_container_width=True, height=520)
 
 @st.cache_data
@@ -453,6 +436,6 @@ with st.expander("About the metrics"):
 - **Approval Rate**: rows with approval (Decline Reason starts `"00"` or Auth Code present) ÷ all rows.
 - **Revenue**: sum of **Settle Amount** where a settlement file exists (`Date Payment Extract` present) and amount ≠ 0.
 - **AOV**: Revenue ÷ # of settled rows.
-- Product Type Mix groups **Revenue** by `Product Type` monthly (stacked area).
+- **Product Type Mix** groups **Revenue** by `Product Type` monthly (stacked area). Empty product names appear as **“Unknown.”**
 """
     )
