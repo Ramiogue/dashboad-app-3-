@@ -33,7 +33,7 @@ def apply_plotly_layout(fig):
     return fig
 
 # =========================
-# Global CSS (Power BI style + login inputs fix)
+# Global CSS (Power BI style + login inputs fix + equal KPI heights)
 # =========================
 st.markdown(
     f"""
@@ -48,7 +48,7 @@ st.markdown(
     }}
     .title-left h1 {{ font-size: 1.15rem; margin: 0; color: {TEXT}; }}
 
-    /* KPI cards (slim, one line via st.columns) */
+    /* KPI cards (uniform height, single row via st.columns) */
     .kpi-card {{
         background: {CARD_BG};
         border: 1px solid #e5e7eb;
@@ -56,12 +56,18 @@ st.markdown(
         border-radius: 12px;
         padding: 8px 10px;
         box-shadow: 0 1px 2px rgba(16,24,40,0.04);
-        min-height: 64px;
-        height: 100%;
+
+        /* SAME HEIGHT FOR ALL */
+        height: 84px;                /* fixed height */
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 2px;
+        overflow: hidden;            /* no wrap-induced growth */
     }}
-    .kpi-title {{ font-size: 0.72rem; color: #6b7280; margin-bottom: 2px; }}
-    .kpi-value {{ font-size: 1.25rem; font-weight: 800; color: {TEXT}; line-height: 1.05; }}
-    .kpi-sub   {{ font-size: 0.75rem; color: #6b7280; margin-top: 2px; }}
+    .kpi-title {{ font-size: 0.72rem; color: #6b7280; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+    .kpi-value {{ font-size: 1.25rem; font-weight: 800; color: {TEXT}; line-height: 1.05; margin: 0; }}
+    .kpi-sub   {{ font-size: 0.75rem; color: #6b7280; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
 
     .card {{
         background: {CARD_BG};
@@ -132,7 +138,7 @@ authenticator = stauth.Authenticate(
     cookie_expiry_days=7,
 )
 
-# Put login inside a card for a cleaner look
+# Optional: put login inside a card for a cleaner frame
 with st.container():
     st.markdown('<div class="card">', unsafe_allow_html=True)
     authenticator.login(location="main")
@@ -241,11 +247,11 @@ flt &= f0["Issuing Bank"].isin(sel_issuer)
 f = f0[flt].copy()
 
 # =========================
-# KPIs (single slim row via st.columns)
+# KPIs (single row via st.columns, equal heights via CSS above)
 # =========================
 def safe_div(n, d): return (n / d) if d else np.nan
 
-# Your request: “# Transactions” = ALL rows (Purchases + Refunds + Reversals)
+# “# Transactions” = ALL rows (Purchases + Refunds + Reversals)
 transactions_cnt = int(len(f))
 
 # Purchase-flow metrics (for funnel/ratios)
@@ -298,7 +304,7 @@ with cols[1]:
 with cols[2]:
     kpi_card("Net Settled", f"R {net_settled:,.0f}")
 with cols[3]:
-    kpi_card("Refunds", f"R {refund_total:,.0f}", "Negative = money returned")
+    kpi_card("Refunds", f"R {refund_total:,.0f}", "Negative")
 with cols[4]:
     kpi_card("Net After Refunds", f"R {net_after_ref:,.0f}")
 with cols[5]:
