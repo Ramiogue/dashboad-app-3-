@@ -192,7 +192,7 @@ if missing:
     st.error(f"Missing required column(s): {', '.join(sorted(missing))}")
     st.stop()
 
-# Basic cleaning (NO reliance on Transaction Type)
+# Basic cleaning (no reliance on Transaction Type)
 tx[MERCHANT_ID_COL] = tx[MERCHANT_ID_COL].astype(str).str.strip()
 tx["Transaction Date"] = pd.to_datetime(tx["Transaction Date"], errors="coerce")
 tx["Request Amount"] = pd.to_numeric(tx["Request Amount"], errors="coerce")
@@ -209,7 +209,6 @@ if f0.empty:
 # Approval & Settlement (independent of Transaction Type)
 def approved_mask(df):
     dr = df["Decline Reason"].astype(str).str.strip()
-    # Approved if code starts with '00' OR we have any Auth Code
     return dr.str.startswith("00") | (df["Auth Code"].astype(str).str.len() > 0)
 
 def settled_mask(df):
@@ -244,19 +243,17 @@ flt &= f0["Issuing Bank"].isin(sel_issuer)
 f = f0[flt].copy()
 
 # =========================
-# KPIs (NO use of Transaction Type)
+# KPIs
 # =========================
 def safe_div(n, d): return (n / d) if d else np.nan
 
-transactions_cnt = int(len(f))  # all rows in range
+transactions_cnt   = int(len(f))                       # all rows
+attempts_cnt       = int(len(f))                       # treat all as attempts
+approved_cnt       = int(f["is_approved"].sum())
+approval_rate      = safe_div(approved_cnt, attempts_cnt)
+decline_rate       = safe_div(attempts_cnt - approved_cnt, attempts_cnt)
 
-# Treat every row as an "attempt" (since your column only has 'Goods and Services')
-attempts_cnt  = int(len(f))
-approved_cnt  = int(f["is_approved"].sum())
-approval_rate = safe_div(approved_cnt, attempts_cnt)
-decline_rate  = safe_div(attempts_cnt - approved_cnt, attempts_cnt)
-
-# Revenue = sum of settled Settle Amount (no transaction-type dependency)
+# Revenue = sum of settled Settle Amount
 settled_rows = f["is_settled"]
 revenue      = float(f.loc[settled_rows, "Settle Amount"].sum())
 settled_cnt  = int(settled_rows.sum())
@@ -270,7 +267,6 @@ if header_path:
     st.image(header_path, use_column_width=True)
 else:
     st.markdown('<div class="header-row"><div class="title-left"><h1>Merchant Dashboard</h1></div></div>', unsafe_allow_html=True)
-
 st.caption(f"Merchant: **{merchant_id_value}**  •  Source: `{f['__path__'].iat[0]}`  •  Date: {start_date} → {end_date}")
 
 def kpi_card(title, value, sub=""):
@@ -281,16 +277,13 @@ def kpi_card(title, value, sub=""):
           <div class="kpi-value">{value}</div>
           <div class="kpi-sub">{sub}</div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        """, unsafe_allow_html=True)
 
-# KPIs (renamed Net Settled → Revenue; removed Refunds/Net After Refunds)
 cols = st.columns(6, gap="small")
 with cols[0]:
     kpi_card("# Transactions", f"{transactions_cnt:,}")
 with cols[1]:
-    kpi_card("Total Requests", f"R {float(f['Request Amount'].sum()):,.0f}")
+    kpi_card("Attempted Sales (Value)", f"R {float(f['Request Amount'].sum()):,.0f}", "Sum of Request Amount")
 with cols[2]:
     kpi_card("Revenue", f"R {revenue:,.0f}")
 with cols[3]:
@@ -301,7 +294,7 @@ with cols[5]:
     kpi_card("Average Order Value (AOV)", f"R {aov:,.2f}" if not math.isnan(aov) else "—")
 
 # =========================
-# Revenue per Month — LINE chart (no Transaction Type)
+# Revenue per Month — LINE chart
 # =========================
 st.markdown('<div class="card">', unsafe_allow_html=True)
 st.markdown("### Revenue per Month")
@@ -315,7 +308,6 @@ df_month = (
 )
 
 if not df_month.empty:
-    # fill missing months with 0 so the line is continuous
     full_months = pd.date_range(df_month["month_start"].min(),
                                 df_month["month_start"].max(),
                                 freq="MS")
@@ -346,7 +338,7 @@ else:
 st.markdown('</div>', unsafe_allow_html=True)
 
 # =========================
-# Row: Issuing Bank Mix + Decline Reasons
+# Row: Issuing Bank Mix + Decline Reasons / Product Type Mix (tabs)
 # =========================
 cA, cB = st.columns(2, gap="small")
 
@@ -371,24 +363,58 @@ with cA:
 
 with cB:
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("### Top Decline Reasons (as % of Attempts)")
-    base_attempts = int(len(f))  # treat all rows as attempts
-    decl_df = (
-        f.loc[~f["is_approved"], ["Decline Reason"]]
-         .value_counts()
-         .reset_index(name="count")
-         .rename(columns={"index": "Decline Reason"})
-         .sort_values("count", ascending=True)
-    )
-    if not decl_df.empty and base_attempts > 0:
-        decl_df["pct_of_attempts"] = decl_df["count"] / base_attempts
-        fig_decl = px.bar(decl_df, x="pct_of_attempts", y="Decline Reason", orientation="h")
-        fig_decl.update_traces(marker_color=GREY_BAR, texttemplate="%{x:.0%}", textposition="outside")
-        fig_decl.update_xaxes(tickformat=".0%", range=[0, max(0.01, float(decl_df["pct_of_attempts"].max()) * 1.15)])
-        apply_plotly_layout(fig_decl)
-        st.plotly_chart(fig_decl, use_container_width=True)
-    else:
-        st.info("No declines in the selected period.")
+    st.markdown("### Declines & Product Mix")
+    tab_decl, tab_mix = st.tabs(["Top Decline Reasons", "Product Type Mix Over Time"])
+
+    with tab_decl:
+        base_attempts = int(len(f))  # treat all rows as attempts
+        decl_df = (
+            f.loc[~f["is_approved"], ["Decline Reason"]]
+             .value_counts()
+             .reset_index(name="count")
+             .rename(columns={"index": "Decline Reason"})
+             .sort_values("count", ascending=True)
+        )
+        if not decl_df.empty and base_attempts > 0:
+            decl_df["pct_of_attempts"] = decl_df["count"] / base_attempts
+            fig_decl = px.bar(decl_df, x="pct_of_attempts", y="Decline Reason", orientation="h")
+            fig_decl.update_traces(marker_color=GREY_BAR, texttemplate="%{x:.0%}", textposition="outside")
+            fig_decl.update_xaxes(tickformat=".0%", range=[0, max(0.01, float(decl_df["pct_of_attempts"].max()) * 1.15)])
+            apply_plotly_layout(fig_decl)
+            st.plotly_chart(fig_decl, use_container_width=True)
+        else:
+            st.info("No declines in the selected period.")
+
+    with tab_mix:
+        # Stacked monthly area for Product Type (Revenue only)
+        mix_df = (
+            f.loc[settled_rows, ["Transaction Date", "Settle Amount", "Product Type"]]
+             .assign(month_start=lambda d: pd.to_datetime(d["Transaction Date"]).dt.to_period("M").dt.to_timestamp())
+             .groupby(["month_start", "Product Type"], as_index=False)
+             .agg(revenue=("Settle Amount", "sum"))
+             .sort_values("month_start")
+        )
+        if not mix_df.empty:
+            # Ensure continuous months across all product types (fill missing with 0)
+            all_months = pd.date_range(mix_df["month_start"].min(), mix_df["month_start"].max(), freq="MS")
+            all_products = sorted(mix_df["Product Type"].unique().tolist())
+            complete_index = pd.MultiIndex.from_product([all_months, all_products], names=["month_start", "Product Type"])
+            mix_df = (
+                mix_df.set_index(["month_start", "Product Type"])
+                      .reindex(complete_index, fill_value=0)
+                      .reset_index()
+            )
+            fig_mix = px.area(
+                mix_df, x="month_start", y="revenue", color="Product Type",
+                groupnorm=None
+            )
+            fig_mix.update_xaxes(title_text="", tickformat="%b %Y", dtick="M1")
+            fig_mix.update_yaxes(title_text="Revenue")
+            fig_mix.update_layout(title_text="Product Type Mix Over Time (Monthly, Stacked Area)")
+            apply_plotly_layout(fig_mix)
+            st.plotly_chart(fig_mix, use_container_width=True)
+        else:
+            st.info("No revenue by Product Type in the selected period.")
     st.markdown('</div>', unsafe_allow_html=True)
 
 # =========================
@@ -405,7 +431,7 @@ show_cols = [
     "System Trace Audit Number", "Retrieval Reference", "UTI", "Online Reference Number",
 ]
 existing_cols = [c for c in show_cols if c in f.columns]
-tbl = f[existing_cols].sort_values("Transaction Date", ascending=False).reset_index(drop=True)
+tbl = f[existing_cols].sort_values("Transaction Date", descending=False).reset_index(drop=True)
 st.dataframe(tbl, use_container_width=True, height=520)
 
 @st.cache_data
@@ -423,9 +449,10 @@ with st.expander("About the metrics"):
     st.write(
         """
 - **# Transactions**: all rows in the selected range.
-- **Approval Rate**: rows with approval (Decline Reason starts with `"00"` or Auth Code present) ÷ all rows.
+- **Attempted Sales (Value)**: sum of **Request Amount** for all rows.
+- **Approval Rate**: rows with approval (Decline Reason starts `"00"` or Auth Code present) ÷ all rows.
 - **Revenue**: sum of **Settle Amount** where a settlement file exists (`Date Payment Extract` present) and amount ≠ 0.
 - **AOV**: Revenue ÷ # of settled rows.
-- Visuals do **not** rely on `Transaction Type`.
+- Product Type Mix groups **Revenue** by `Product Type` monthly (stacked area).
 """
     )
