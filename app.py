@@ -104,6 +104,34 @@ st.markdown(
     div[data-testid="stPassword"] label {{
       margin-bottom: 6px !important;
     }}
+
+    /* ===== Sidebar Filters (collapsible + darker grey) ===== */
+    [data-testid="stSidebar"] {{
+      background: {GREY_BG};
+    }}
+
+    /* Expander container */
+    [data-testid="stSidebar"] [data-testid="stExpander"],
+    [data-testid="stSidebar"] details {{
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      overflow: hidden;
+    }}
+
+    /* Expander header */
+    [data-testid="stSidebar"] .streamlit-expanderHeader {{
+      background: #e9edf5;   /* darker than app bg */
+      color: {TEXT};
+      font-weight: 700;
+      padding: 8px 12px;
+    }}
+
+    /* Expander content */
+    [data-testid="stSidebar"] .streamlit-expanderContent {{
+      background: #eef2f7;   /* darker than app bg */
+      padding: 8px 12px;
+      border-top: 1px solid #e5e7eb;
+    }}
     </style>
     """,
     unsafe_allow_html=True,
@@ -221,27 +249,33 @@ f0["is_approved"] = approved_mask(f0)
 f0["is_settled"]  = settled_mask(f0)
 
 # =========================
-# Sidebar filters
+# Sidebar filters (collapsible with darker grey panel)
 # =========================
-st.sidebar.subheader("Filters")
-min_d = pd.to_datetime(f0["Transaction Date"].min()).date()
-max_d = pd.to_datetime(f0["Transaction Date"].max()).date()
-date_range = st.sidebar.date_input("Date range", value=(min_d, max_d), min_value=min_d, max_value=max_d)
+with st.sidebar.expander("Filters", expanded=True):
+    valid_dates = f0["Transaction Date"].dropna()
+    min_d = pd.to_datetime(valid_dates.min()).date()
+    max_d = pd.to_datetime(valid_dates.max()).date()
+
+    date_range = st.date_input("Date range", value=(min_d, max_d), min_value=min_d, max_value=max_d)
+
+    def _multi(label, series):
+        opts = sorted(series.astype(str).unique())
+        return st.multiselect(label, options=opts, default=opts)
+
+    sel_declines = _multi("Decline Reason", f0["Decline Reason"])
+    sel_prodtype = _multi("Product Type",    f0["Product Type"])
+    sel_issuer   = _multi("Issuing Bank",    f0["Issuing Bank"])
+
 start_date, end_date = (date_range if isinstance(date_range, tuple) else (min_d, max_d))
-
-def _multi(label, series):
-    opts = sorted(series.unique())
-    return st.sidebar.multiselect(label, options=opts, default=opts)
-
-sel_declines = _multi("Decline Reason", f0["Decline Reason"])
-sel_prodtype = _multi("Product Type",    f0["Product Type"])
-sel_issuer   = _multi("Issuing Bank",    f0["Issuing Bank"])
 
 flt = (f0["Transaction Date"].dt.date >= start_date) & (f0["Transaction Date"].dt.date <= end_date)
 flt &= f0["Decline Reason"].isin(sel_declines)
 flt &= f0["Product Type"].isin(sel_prodtype)
 flt &= f0["Issuing Bank"].isin(sel_issuer)
 f = f0[flt].copy()
+if f.empty:
+    st.warning("No data for the selected filters.")
+    st.stop()
 
 # =========================
 # KPIs (NO use of Transaction Type)
@@ -426,6 +460,7 @@ with st.expander("About the metrics"):
 - **Approval Rate**: rows with approval (Decline Reason starts with `"00"` or Auth Code present) ÷ all rows.
 - **Revenue**: sum of **Settle Amount** where a settlement file exists (`Date Payment Extract` present) and amount ≠ 0.
 - **AOV**: Revenue ÷ # of settled rows.
+- **Total Requests**: Sum of **Request Amount** for all rows in the selected range.
 - Visuals do **not** rely on `Transaction Type`.
 """
     )
