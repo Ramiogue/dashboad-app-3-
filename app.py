@@ -401,28 +401,42 @@ else:
     st.info("No settled revenue in the selected period.")
 st.markdown('</div>', unsafe_allow_html=True)
 
-# 2) Product Type Mix Over Time (Stacked Area, by Revenue)
-st.markdown(section_title("Product Type Mix Over Time"), unsafe_allow_html=True)
+# 2b) Product Type Mix (Pie / Donut)
+st.markdown(section_title("Product Type Mix (Pie)"), unsafe_allow_html=True)
 st.markdown('<div class="card">', unsafe_allow_html=True)
-mix = f.loc[settled_rows, ["Transaction Date","Product Type","Settle Amount"]].copy()
-if not mix.empty:
-    mix["month"] = pd.to_datetime(mix["Transaction Date"]).dt.to_period("M").dt.to_timestamp()
-    mix = (mix.groupby(["month","Product Type"], as_index=False)["Settle Amount"].sum()
-              .rename(columns={"Settle Amount":"revenue"}).sort_values("month"))
-    fig_mix = px.area(mix, x="month", y="revenue", color="Product Type")
-    fig_mix.update_traces(stackgroup="one")
-    fig_mix.update_layout(title_text="Revenue Mix by Product Type (Stacked Area)")
-    fig_mix.update_xaxes(title_text="", tickformat="%b %Y", dtick="M1")
-    fig_mix.update_yaxes(title_text="Revenue (R)", tickprefix="R ", separatethousands=True)
-    fig_mix.update_traces(hovertemplate="<b>%{x|%b %Y}</b><br>%{fullData.name}: R %{y:,.0f}<extra></extra>")
-    # Neutral palette to keep it pro
-    fig_mix.update_traces()
-    fig_mix.update_layout(colorway=NEUTRALS)
-    apply_plotly_layout(fig_mix)
-    st.plotly_chart(fig_mix, use_container_width=True, height=360)
+
+prod_pie = f.loc[settled_rows, ["Product Type", "Settle Amount"]].copy()
+if not prod_pie.empty:
+    prod_pie = (
+        prod_pie.groupby("Product Type", as_index=False)["Settle Amount"]
+                .sum()
+                .rename(columns={"Settle Amount": "revenue"})
+                .sort_values("revenue", ascending=False)
+    )
+
+    fig_pie_pt = px.pie(
+        prod_pie,
+        values="revenue",
+        names="Product Type",
+        hole=0.5,                            # donut look (Power BI vibe)
+    )
+    # Clean, pro styling
+    fig_pie_pt.update_traces(
+        textposition="inside",
+        texttemplate="%{label}<br>R %{value:,.0f}<br>%{percent:.0%}",
+        hovertemplate="%{label}<br>Revenue: R %{value:,.0f} (%{percent:.1%})<extra></extra>",
+        marker=dict(line=dict(color="#ffffff", width=1))
+    )
+    fig_pie_pt.update_layout(
+        title_text="Revenue by Product Type",
+        colorway=NEUTRALS  # uses your neutral palette defined earlier
+    )
+    apply_plotly_layout(fig_pie_pt)
+    st.plotly_chart(fig_pie_pt, use_container_width=True, height=420)
 else:
     st.info("No settled revenue in the selected period.")
 st.markdown('</div>', unsafe_allow_html=True)
+
 
 # Two-column row: Top Issuers + Top Declines
 c1, c2 = st.columns((1.2, 1), gap="small")
