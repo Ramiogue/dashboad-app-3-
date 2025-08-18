@@ -15,7 +15,8 @@ st.set_page_config(page_title="Merchant Dashboard", page_icon=None, layout="wide
 # =========================
 # Professional Theme Tokens
 # =========================
-PRIMARY = "#0B6E4F"      # single accent (brand green)
+PRIMARY = "#0B6E4F"      # brand green
+GREEN_2 = "#149E67"      # deeper green (for open state / hover)
 TEXT    = "#0f172a"      # slate-900
 CARD_BG = "#ffffff"
 
@@ -25,11 +26,11 @@ GREY_200 = "#e2e8f0"     # borders
 GREY_300 = "#cbd5e1"
 GREY_400 = "#94a3b8"
 
-# Sidebar & filter panel tones (darker than page)
+# Sidebar & filter panel tones
 SIDEBAR_BG         = "#eef2f6"
-FILTER_HDR_BG_DEF  = "#e6ebf2"   # expander header (collapsed)
-FILTER_HDR_BG_OPEN = "#dde4ee"   # expander header (open)
-FILTER_CNT_BG_OPEN = "#d6dde9"   # expander content (open)
+FILTER_HDR_BG_DEF  = PRIMARY    # expander header (collapsed) -> brand green
+FILTER_HDR_BG_OPEN = GREEN_2    # expander header (open)      -> darker green
+FILTER_CNT_BG_OPEN = "#e8f5ef"  # expander content (soft green tint)
 
 # Semantic
 DANGER  = "#dc2626"      # declines / errors
@@ -80,9 +81,20 @@ st.markdown(
     /* Typography */
     html, body, [class^="css"] {{ color: {TEXT}; }}
 
-    /* Header */
-    .header-row {{ display:flex; align-items:center; justify-content:space-between; margin-bottom:.25rem; }}
-    .title-left h1 {{ font-size:1.15rem; margin:0; color:{TEXT}; }}
+    /* Header row with logo + title */
+    .header-row {{
+      display:flex; align-items:center; gap:14px; margin-bottom:.25rem;
+    }}
+    .header-logo img {{
+      display:block; height:44px; width:auto; border-radius:6px;
+    }}
+    .title-left h1 {{
+      font-size: 1.6rem;               /* bigger title */
+      font-weight: 800;
+      margin: 0;
+      color: {TEXT};
+      letter-spacing: .2px;
+    }}
 
     /* Section title with accent underline */
     .section-title h2 {{
@@ -138,28 +150,35 @@ st.markdown(
     div[data-testid="stTextInput"] label,
     div[data-testid="stPassword"] label {{ margin-bottom:6px !important; color:{GREY_400}; }}
 
-    /* Sidebar: darker than canvas */
+    /* Sidebar */
     [data-testid="stSidebar"] {{
       background:{SIDEBAR_BG};
       box-shadow: inset -1px 0 0 {GREY_200};
     }}
 
-    /* Filters expander frame */
+    /* Filters expander */
     [data-testid="stSidebar"] details {{
       border:1px solid {GREY_200}; border-radius:12px; overflow:hidden;
     }}
 
-    /* Expander header (collapsed vs open) */
+    /* Expander header (collapsed) */
     [data-testid="stSidebar"] details > summary.streamlit-expanderHeader {{
-      background:{FILTER_HDR_BG_DEF}; color:{TEXT}; font-weight:700; padding:8px 12px; list-style:none;
+      background:{FILTER_HDR_BG_DEF};
+      color:#ffffff;                       /* white text on green */
+      font-weight:700; padding:8px 12px; list-style:none;
     }}
+
+    /* Expander header (open) */
     [data-testid="stSidebar"] details[open] > summary.streamlit-expanderHeader {{
-      background:{FILTER_HDR_BG_OPEN}; border-bottom:1px solid {GREY_200};
+      background:{FILTER_HDR_BG_OPEN};
+      color:#ffffff;
+      border-bottom:1px solid {GREY_200};
     }}
 
     /* Expander content (open) */
     [data-testid="stSidebar"] details[open] .streamlit-expanderContent {{
-      background:{FILTER_CNT_BG_OPEN}; padding:8px 12px;
+      background:{FILTER_CNT_BG_OPEN};
+      padding:8px 12px;
     }}
 
     /* Multiselect chips */
@@ -285,7 +304,7 @@ f0["is_approved"] = approved_mask(f0)
 f0["is_settled"]  = settled_mask(f0)
 
 # =========================
-# Sidebar filters (collapsible, darker when open)
+# Sidebar filters (collapsible, brand-green header)
 # =========================
 with st.sidebar.expander("Filters", expanded=True):
     valid_dates = f0["Transaction Date"].dropna()
@@ -329,12 +348,26 @@ revenue      = float(f.loc[settled_rows, "Settle Amount"].sum())
 settled_cnt  = int(settled_rows.sum())
 aov          = safe_div(revenue, settled_cnt)
 
-# Header
-header_path = None
-for p in ("assets/header.jpg","assets/header.png","assets/header.jpeg","assets/header.webp"):
-    if os.path.exists(p): header_path = p; break
-if header_path:
-    st.image(header_path, use_column_width=True)
+# =========================
+# Header (logo + big title)
+# Put your logo at one of these paths: assets/spaza_eats.png|jpg|webp or assets/logo.png|jpg|webp
+# =========================
+logo_path = None
+for p in (
+    "assets/spaza_eats.png","assets/spaza_eats.jpg","assets/spaza_eats.webp",
+    "assets/logo.png","assets/logo.jpg","assets/logo.webp",
+    "spaza_eats.png","spaza_eats.jpg","spaza_eats.webp"
+):
+    if os.path.exists(p): logo_path = p; break
+
+if logo_path:
+    col_logo, col_title = st.columns([0.09, 0.91])
+    with col_logo:
+        st.markdown('<div class="header-logo">', unsafe_allow_html=True)
+        st.image(logo_path, use_column_width=False)
+        st.markdown('</div>', unsafe_allow_html=True)
+    with col_title:
+        st.markdown('<div class="header-row"><div class="title-left"><h1>Merchant Dashboard</h1></div></div>', unsafe_allow_html=True)
 else:
     st.markdown('<div class="header-row"><div class="title-left"><h1>Merchant Dashboard</h1></div></div>', unsafe_allow_html=True)
 
@@ -383,7 +416,6 @@ df_month = (
       .sort_values("month_start")
 )
 if not df_month.empty:
-    # fill missing months for smooth line
     full_months = pd.date_range(df_month["month_start"].min(), df_month["month_start"].max(), freq="MS")
     df_month = (df_month.set_index("month_start").reindex(full_months, fill_value=0)
                 .rename_axis("month_start").reset_index())
@@ -401,7 +433,7 @@ else:
     st.info("No settled revenue in the selected period.")
 st.markdown('</div>', unsafe_allow_html=True)
 
-# 2) # 2b) Product Type Mix (Pie / Donut)
+# 2) Product Type Mix (Pie / Donut)
 st.markdown(section_title("Product Type Mix (Pie)"), unsafe_allow_html=True)
 st.markdown('<div class="card">', unsafe_allow_html=True)
 
@@ -418,9 +450,8 @@ if not prod_pie.empty:
         prod_pie,
         values="revenue",
         names="Product Type",
-        hole=0.5,                            # donut look (Power BI vibe)
+        hole=0.5,     # donut look
     )
-    # Clean, pro styling
     fig_pie_pt.update_traces(
         textposition="inside",
         texttemplate="%{label}<br>R %{value:,.0f}<br>%{percent:.0%}",
@@ -429,14 +460,13 @@ if not prod_pie.empty:
     )
     fig_pie_pt.update_layout(
         title_text="Revenue by Product Type",
-        colorway=NEUTRALS  # uses your neutral palette defined earlier
+        colorway=NEUTRALS
     )
     apply_plotly_layout(fig_pie_pt)
     st.plotly_chart(fig_pie_pt, use_container_width=True, height=420)
 else:
     st.info("No settled revenue in the selected period.")
 st.markdown('</div>', unsafe_allow_html=True)
-
 
 # Two-column row: Top Issuers + Top Declines
 c1, c2 = st.columns((1.2, 1), gap="small")
@@ -510,7 +540,7 @@ for col in ["Request Amount", "Settle Amount"]:
     if col in tbl.columns:
         tbl[col] = tbl[col].apply(lambda v: f"R {v:,.2f}" if pd.notnull(v) else "")
 
-st.dataframe(tbl, use_container_width=True, height=520)
+st.dataframe(tbl, use_column_width=True, height=520)
 
 @st.cache_data
 def to_csv_bytes(df: pd.DataFrame) -> bytes:
