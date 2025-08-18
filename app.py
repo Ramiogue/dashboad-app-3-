@@ -14,11 +14,17 @@ st.set_page_config(page_title="Merchant Dashboard", page_icon=None, layout="wide
 
 PRIMARY = "#0B6E4F"      # brand green
 GREEN_2 = "#149E67"
-GREY_BG = "#f5f7fb"      # app bg
+GREY_BG = "#f5f7fb"      # app bg (main canvas)
 CARD_BG = "#ffffff"      # card bg
 TEXT = "#1f2937"
 GREY_BAR = "#94a3b8"
 GREY_BAR_DARK = "#64748b"
+
+# New: sidebar & filter panel tones (all darker than GREY_BG)
+SIDEBAR_BG            = "#e9edf5"  # whole sidebar background
+FILTER_HDR_BG_DEFAULT = "#e5eaf4"  # expander header (collapsed)
+FILTER_HDR_BG_OPEN    = "#dfe5f0"  # expander header (when open/clicked)
+FILTER_CNT_BG_OPEN    = "#d7deea"  # expander content (when open)
 
 def apply_plotly_layout(fig):
     fig.update_layout(
@@ -33,7 +39,7 @@ def apply_plotly_layout(fig):
     return fig
 
 # =========================
-# Global CSS (Power BI style + login inputs fix + equal KPI heights)
+# Global CSS (Power BI style + login inputs fix + equal KPI heights + darker sidebar)
 # =========================
 st.markdown(
     f"""
@@ -48,7 +54,7 @@ st.markdown(
     }}
     .title-left h1 {{ font-size: 1.15rem; margin: 0; color: {TEXT}; }}
 
-    /* KPI cards (uniform height, single row via st.columns) */
+    /* KPI cards */
     .kpi-card {{
         background: {CARD_BG};
         border: 1px solid #e5e7eb;
@@ -56,13 +62,9 @@ st.markdown(
         border-radius: 12px;
         padding: 8px 10px;
         box-shadow: 0 1px 2px rgba(16,24,40,0.04);
-
-        height: 84px;                /* fixed height for uniform boxes */
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        gap: 2px;
-        overflow: hidden;
+        height: 84px;
+        display: flex; flex-direction: column; justify-content: center;
+        gap: 2px; overflow: hidden;
     }}
     .kpi-title {{ font-size: 0.72rem; color: #6b7280; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
     .kpi-value {{ font-size: 1.25rem; font-weight: 800; color: {TEXT}; line-height: 1.05; margin: 0; }}
@@ -101,36 +103,54 @@ st.markdown(
       box-shadow: 0 0 0 3px rgba(11,110,79,0.10) !important;
     }}
     div[data-testid="stTextInput"] label,
-    div[data-testid="stPassword"] label {{
-      margin-bottom: 6px !important;
-    }}
+    div[data-testid="stPassword"] label {{ margin-bottom: 6px !important; }}
 
-    /* ===== Sidebar Filters (collapsible + darker grey) ===== */
+    /* =======================
+       Sidebar — darker than app bg
+       ======================= */
     [data-testid="stSidebar"] {{
-      background: {GREY_BG};
+      background: {SIDEBAR_BG};
+      box-shadow: inset -1px 0 0 #e5e7eb; /* subtle divider to main area */
     }}
 
-    /* Expander container */
-    [data-testid="stSidebar"] [data-testid="stExpander"],
+    /* Filters expander frame */
     [data-testid="stSidebar"] details {{
-      border: 1px solid #e5e7eb;
+      border: 1px solid #d7dde5;
       border-radius: 12px;
       overflow: hidden;
     }}
 
-    /* Expander header */
-    [data-testid="stSidebar"] .streamlit-expanderHeader {{
-      background: #e9edf5;   /* darker than app bg */
+    /* Expander header (collapsed/default) */
+    [data-testid="stSidebar"] details > summary.streamlit-expanderHeader {{
+      background: {FILTER_HDR_BG_DEFAULT};
       color: {TEXT};
       font-weight: 700;
       padding: 8px 12px;
+      list-style: none;
     }}
 
-    /* Expander content */
-    [data-testid="stSidebar"] .streamlit-expanderContent {{
-      background: #eef2f7;   /* darker than app bg */
+    /* Expander header when open (clicked) */
+    [data-testid="stSidebar"] details[open] > summary.streamlit-expanderHeader {{
+      background: {FILTER_HDR_BG_OPEN};
+      border-bottom: 1px solid #d4dae4;
+    }}
+
+    /* Expander content when open */
+    [data-testid="stSidebar"] details[open] .streamlit-expanderContent {{
+      background: {FILTER_CNT_BG_OPEN};
       padding: 8px 12px;
-      border-top: 1px solid #e5e7eb;
+    }}
+
+    /* Optional: make inputs blend with the darker panel */
+    [data-testid="stSidebar"] .streamlit-expanderContent div[data-baseweb="input"] input,
+    [data-testid="stSidebar"] .streamlit-expanderContent .stDateInput input {{
+      background: #ffffff !important;
+      border: 1px solid #cdd6e3 !important;
+    }}
+
+    /* Multiselect chips slight tone tweak */
+    [data-testid="stSidebar"] .stMultiSelect [data-baseweb="tag"] {{
+      border-radius: 8px;
     }}
     </style>
     """,
@@ -140,7 +160,6 @@ st.markdown(
 # =========================
 # Auth (from Secrets)
 # =========================
-# Secrets example (TOML):
 # COOKIE_KEY = "replace_with_random_secret"
 # merchant_id_col = "Device Serial"  # or "Merchant Number - Business Name"
 #
@@ -237,7 +256,6 @@ if f0.empty:
 # Approval & Settlement (independent of Transaction Type)
 def approved_mask(df):
     dr = df["Decline Reason"].astype(str).str.strip()
-    # Approved if code starts with '00' OR we have any Auth Code
     return dr.str.startswith("00") | (df["Auth Code"].astype(str).str.len() > 0)
 
 def settled_mask(df):
@@ -249,7 +267,7 @@ f0["is_approved"] = approved_mask(f0)
 f0["is_settled"]  = settled_mask(f0)
 
 # =========================
-# Sidebar filters (collapsible with darker grey panel)
+# Sidebar filters (collapsible, with darker grey states)
 # =========================
 with st.sidebar.expander("Filters", expanded=True):
     valid_dates = f0["Transaction Date"].dropna()
@@ -282,15 +300,12 @@ if f.empty:
 # =========================
 def safe_div(n, d): return (n / d) if d else np.nan
 
-transactions_cnt = int(len(f))  # all rows in range
-
-# Treat every row as an "attempt" (since your column only has 'Goods and Services')
+transactions_cnt = int(len(f))
 attempts_cnt  = int(len(f))
 approved_cnt  = int(f["is_approved"].sum())
 approval_rate = safe_div(approved_cnt, attempts_cnt)
 decline_rate  = safe_div(attempts_cnt - approved_cnt, attempts_cnt)
 
-# Revenue = sum of settled Settle Amount (no transaction-type dependency)
 settled_rows = f["is_settled"]
 revenue      = float(f.loc[settled_rows, "Settle Amount"].sum())
 settled_cnt  = int(settled_rows.sum())
@@ -319,7 +334,6 @@ def kpi_card(title, value, sub=""):
         unsafe_allow_html=True,
     )
 
-# KPIs (renamed Net Settled → Revenue; removed Refunds/Net After Refunds)
 cols = st.columns(6, gap="small")
 with cols[0]:
     kpi_card("# Transactions", f"{transactions_cnt:,}")
@@ -335,7 +349,7 @@ with cols[5]:
     kpi_card("Average Order Value (AOV)", f"R {aov:,.2f}" if not math.isnan(aov) else "—")
 
 # =========================
-# Revenue per Month — LINE chart (no Transaction Type)
+# Revenue per Month — LINE chart
 # =========================
 st.markdown('<div class="card">', unsafe_allow_html=True)
 st.markdown("### Revenue per Month")
@@ -349,7 +363,6 @@ df_month = (
 )
 
 if not df_month.empty:
-    # fill missing months with 0 so the line is continuous
     full_months = pd.date_range(df_month["month_start"].min(),
                                 df_month["month_start"].max(),
                                 freq="MS")
@@ -406,7 +419,7 @@ with cA:
 with cB:
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.markdown("### Top Decline Reasons (as % of Attempts)")
-    base_attempts = int(len(f))  # treat all rows as attempts
+    base_attempts = int(len(f))
     decl_df = (
         f.loc[~f["is_approved"], ["Decline Reason"]]
          .value_counts()
@@ -426,7 +439,7 @@ with cB:
     st.markdown('</div>', unsafe_allow_html=True)
 
 # =========================
-# Transactions table (full width)
+# Transactions table
 # =========================
 st.markdown('<div class="card">', unsafe_allow_html=True)
 st.markdown("### Transactions (filtered)")
