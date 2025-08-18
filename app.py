@@ -26,10 +26,12 @@ GREY_300 = "#cbd5e1"
 GREY_400 = "#94a3b8"
 
 # Sidebar & filter panel tones (darker than page)
-SIDEBAR_BG         = "#eef2f6"
-FILTER_HDR_BG_DEF  = "#e6ebf2"   # expander header (collapsed)
-FILTER_HDR_BG_OPEN = "#dde4ee"   # expander header (open)
-FILTER_CNT_BG_OPEN = "#d6dde9"   # expander content (open)
+GREY_50  = "#f3f6fb"   # page background
+SIDEBAR_BG         = "#e1e7f0"
+FILTER_HDR_BG_DEF  = "#dee6f3"
+FILTER_HDR_BG_OPEN = "#d0d7e4"
+FILTER_CNT_BG_OPEN = "#c8d1e0"
+
 
 # Semantic
 DANGER  = "#dc2626"      # declines / errors
