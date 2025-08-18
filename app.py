@@ -13,29 +13,27 @@ import streamlit_authenticator as stauth
 st.set_page_config(page_title="Merchant Dashboard", page_icon=None, layout="wide")
 
 # =========================
-# DARK THEME — Design Tokens (senior-designer palette)
+# TEAL-DARK THEME (matches your example)
 # =========================
-# Canvas & surfaces
-CANVAS_BG   = "#0b1220"   # page background (deep navy)
-SIDEBAR_BG  = "#0a1626"   # sidebar (slightly different hue for depth)
-CARD_BG     = "#0f172a"   # card background (slate-900)
-CARD_BG_2   = "#111827"   # alternate surface (slate-950-ish)
-BORDER      = "#1e293b"   # borders / gridlines
-DIVIDER     = "#223042"   # subtle dividers
+# Surfaces
+CANVAS_BG   = "#0D1F24"  # page background (deep teal-blue)
+SIDEBAR_BG  = "#0B1A1F"  # sidebar (slightly darker)
+CARD_BG     = "#132A30"  # cards
+CARD_BG_2   = "#152F36"  # kpi / inputs surface
+BORDER      = "#1E3A40"  # borders & gridlines
+DIVIDER     = "#21444B"  # subtle dividers
 
 # Typography
-TEXT        = "#e5e7eb"   # base text (near-white)
-TEXT_MUTED  = "#94a3b8"   # secondary text (slate-400)
+TEXT        = "#EAF4F6"  # near-white text
+TEXT_MUTED  = "#96ABB1"  # secondary text
 
-# Accent & semantics
-ACCENT      = "#22d3ee"   # cool cyan/teal accent (chart lines, focus)
-ACCENT_SOFT = "#0ea5b7"   # softer accent for fills
-SUCCESS     = "#10b981"   # approvals etc (if needed)
-DANGER      = "#ef4444"   # declines / errors
-WARNING     = "#f59e0b"
+# Accents / semantics
+ACCENT      = "#2EE6D0"  # bright aqua (lines, highlights)
+ACCENT_SOFT = "#18BFB2"  # softer aqua (bars/fills)
+DANGER      = "#F87171"  # declines / issues
 
-# Neutral categorical palette (for pies/bars/areas)
-NEUTRALS_DARK = ["#60a5fa","#7dd3fc","#a5b4fc","#93c5fd","#67e8f9","#a7f3d0"]  # cool blues/teals
+# Discrete series (neutral-cool)
+SERIES = ["#2EE6D0", "#5FD4FF", "#4CB7C5", "#9EEFE5", "#67E8F9", "#94E2FF"]
 
 def apply_plotly_layout(fig):
     fig.update_layout(
@@ -46,6 +44,7 @@ def apply_plotly_layout(fig):
         font=dict(color=TEXT, size=12),
         title_x=0.01,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        colorway=SERIES,
     )
     fig.update_xaxes(showgrid=True, gridcolor=BORDER, zeroline=False, linecolor=BORDER, tickcolor=BORDER)
     fig.update_yaxes(showgrid=True, gridcolor=BORDER, zeroline=False, linecolor=BORDER, tickcolor=BORDER)
@@ -63,34 +62,24 @@ def section_title(txt):
     """
 
 # =========================
-# Global CSS — dark, teal-led, BI look
+# Global CSS — teal-dark skin
 # =========================
 st.markdown(
     f"""
     <style>
-    /* Canvas */
     .stApp {{ background: {CANVAS_BG}; color: {TEXT}; }}
-    .block-container {{
-      padding-top: .8rem; padding-bottom: 1.2rem;
-      max-width: 1280px; margin: 0 auto;  /* centered report canvas */
-    }}
+    .block-container {{ padding-top:.8rem; padding-bottom:1.2rem; max-width:1280px; margin:0 auto; }}
 
     /* Header */
     .header-row {{
       display:flex; align-items:center; justify-content:space-between; margin-bottom:.25rem;
-      border-bottom: 1px solid {DIVIDER}; padding-bottom: 6px;
+      border-bottom:1px solid {DIVIDER}; padding-bottom:6px;
     }}
     .title-left h1 {{ font-size:1.15rem; margin:0; color:{TEXT}; }}
 
-    /* Section title with accent underline */
-    .section-title h2 {{
-      font-size:1.2rem; margin: 12px 0 6px 0; color:{TEXT};
-      position: relative; padding-bottom:8px;
-    }}
-    .section-title h2:after {{
-      content:""; position:absolute; left:0; bottom:0; height:3px; width:64px;
-      background:{ACCENT}; border-radius:3px;
-    }}
+    /* Section title w/ aqua underline */
+    .section-title h2 {{ font-size:1.2rem; margin:12px 0 6px 0; color:{TEXT}; position:relative; padding-bottom:8px; }}
+    .section-title h2:after {{ content:""; position:absolute; left:0; bottom:0; height:3px; width:64px; background:{ACCENT}; border-radius:3px; }}
 
     /* Cards */
     .card {{
@@ -105,19 +94,23 @@ st.markdown(
 
     /* KPI cards */
     .kpi-card {{
-      background: {CARD_BG_2};
+      background:{CARD_BG_2};
       border:1px solid {BORDER};
-      border-left:4px solid {ACCENT};
       border-radius:12px;
       padding:10px 12px;
       box-shadow:0 1px 2px rgba(0,0,0,0.35);
       height:84px; display:flex; flex-direction:column; justify-content:center; gap:2px; overflow:hidden;
+      position:relative;
+    }}
+    .kpi-card:before {{
+      content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:{ACCENT};
+      border-top-left-radius:12px; border-bottom-left-radius:12px;
     }}
     .kpi-title {{ font-size:.72rem; color:{TEXT_MUTED}; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
     .kpi-value {{ font-size:1.25rem; font-weight:800; color:{TEXT}; line-height:1.05; margin:0; }}
     .kpi-sub   {{ font-size:.75rem; color:{TEXT_MUTED}; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
 
-    /* Inputs — dark UI */
+    /* Inputs — dark */
     div[data-testid="stTextInput"] input,
     div[data-testid="stPassword"] input,
     .stTextInput input, .stPassword input,
@@ -131,39 +124,28 @@ st.markdown(
     .stTextInput input:focus, .stPassword input:focus,
     div[data-baseweb="input"] input:focus {{
       border:1.5px solid {ACCENT} !important;
-      outline:none !important; box-shadow:0 0 0 3px rgba(34,211,238,.20) !important;
+      outline:none !important; box-shadow:0 0 0 3px rgba(46,230,208,.20) !important;
     }}
     div[data-testid="stTextInput"] label,
     div[data-testid="stPassword"] label {{ margin-bottom:6px !important; color:{TEXT_MUTED}; }}
 
-    /* Sidebar — darker than canvas, collapsible Filters styled */
-    [data-testid="stSidebar"] {{
-      background:{SIDEBAR_BG};
-      box-shadow: inset -1px 0 0 {BORDER};
-      color:{TEXT};
-    }}
+    /* Sidebar */
+    [data-testid="stSidebar"] {{ background:{SIDEBAR_BG}; box-shadow:inset -1px 0 0 {BORDER}; color:{TEXT}; }}
 
-    [data-testid="stSidebar"] details {{
-      border:1px solid {BORDER}; border-radius:12px; overflow:hidden;
-    }}
+    [data-testid="stSidebar"] details {{ border:1px solid {BORDER}; border-radius:12px; overflow:hidden; }}
     [data-testid="stSidebar"] details > summary.streamlit-expanderHeader {{
-      background:#0d2035; color:{TEXT}; font-weight:700; padding:8px 12px; list-style:none;
+      background:#0E2630; color:{TEXT}; font-weight:700; padding:8px 12px; list-style:none;
     }}
     [data-testid="stSidebar"] details[open] > summary.streamlit-expanderHeader {{
-      background:#0f2a44; border-bottom:1px solid {BORDER};
+      background:#10323E; border-bottom:1px solid {BORDER};
     }}
-    [data-testid="stSidebar"] details[open] .streamlit-expanderContent {{
-      background:#0e233a; padding:8px 12px;
-    }}
-    [data-testid="stSidebar"] .stDateInput input {{
-      background:{CARD_BG_2} !important; border:1px solid {BORDER} !important; color:{TEXT} !important;
-    }}
-    [data-testid="stSidebar"] .stMultiSelect [data-baseweb="tag"] {{
-      border-radius:8px; background:#0b2137; color:{TEXT};
-    }}
+    [data-testid="stSidebar"] details[open] .streamlit-expanderContent {{ background:#0F2B35; padding:8px 12px; }}
+
+    [data-testid="stSidebar"] .stDateInput input {{ background:{CARD_BG_2} !important; border:1px solid {BORDER} !important; color:{TEXT} !important; }}
+    [data-testid="stSidebar"] .stMultiSelect [data-baseweb="tag"] {{ border-radius:8px; background:#0F2B35; color:{TEXT}; }}
 
     /* Soft divider */
-    .soft-divider {{ height:10px; border-radius:999px; background:{CARD_BG}; border:1px solid {BORDER}; margin: 6px 0 16px 0; }}
+    .soft-divider {{ height:10px; border-radius:999px; background:{CARD_BG}; border:1px solid {BORDER}; margin:6px 0 16px 0; }}
     </style>
     """,
     unsafe_allow_html=True,
@@ -355,7 +337,7 @@ with cols[5]:
 st.markdown('<div class="soft-divider"></div>', unsafe_allow_html=True)
 
 # =========================
-# Charts (unchanged visuals, dark styling)
+# Charts (same visuals, teal-dark styling)
 # =========================
 
 # Revenue per Month — LINE
@@ -392,7 +374,7 @@ mix = f.loc[settled_rows, ["Transaction Date","Product Type","Settle Amount"]].c
 if not mix.empty:
     mix["month"] = pd.to_datetime(mix["Transaction Date"]).dt.to_period("M").dt.to_timestamp()
     mix = mix.groupby(["month","Product Type"], as_index=False)["Settle Amount"].sum().rename(columns={"Settle Amount":"revenue"}).sort_values("month")
-    fig_mix = px.area(mix, x="month", y="revenue", color="Product Type", color_discrete_sequence=NEUTRALS_DARK)
+    fig_mix = px.area(mix, x="month", y="revenue", color="Product Type", color_discrete_sequence=SERIES)
     fig_mix.update_traces(stackgroup="one", line=dict(width=1, color=CANVAS_BG), opacity=0.9)
     fig_mix.update_layout(title_text="Revenue Mix by Product Type (Stacked Area)")
     fig_mix.update_xaxes(title_text="", tickformat="%b %Y", dtick="M1")
@@ -404,13 +386,13 @@ else:
     st.info("No settled revenue in the selected period.")
 st.markdown('</div>', unsafe_allow_html=True)
 
-# OPTIONAL PIE — Product Type Mix (revenue)
+# Product Type Mix (Pie / Donut)
 st.markdown(section_title("Product Type Mix (Pie)"), unsafe_allow_html=True)
 st.markdown('<div class="card">', unsafe_allow_html=True)
 prod_pie = f.loc[settled_rows, ["Product Type", "Settle Amount"]].copy()
 if not prod_pie.empty:
     prod_pie = prod_pie.groupby("Product Type", as_index=False)["Settle Amount"].sum().rename(columns={"Settle Amount": "revenue"}).sort_values("revenue", ascending=False)
-    fig_pie_pt = px.pie(prod_pie, values="revenue", names="Product Type", hole=0.55, color_discrete_sequence=NEUTRALS_DARK)
+    fig_pie_pt = px.pie(prod_pie, values="revenue", names="Product Type", hole=0.55, color_discrete_sequence=SERIES)
     fig_pie_pt.update_traces(
         textposition="inside",
         texttemplate="%{label}<br>R %{value:,.0f}<br>%{percent:.0%}",
@@ -424,7 +406,7 @@ else:
     st.info("No settled revenue in the selected period.")
 st.markdown('</div>', unsafe_allow_html=True)
 
-# Two-column row: Top Issuers + Top Decline Reasons
+# Two-column row: Top Issuers + Top Declines
 c1, c2 = st.columns((1.2, 1), gap="small")
 
 with c1:
@@ -438,7 +420,8 @@ with c1:
          .head(10)
     )
     if not issuer_df.empty:
-        fig_bank = px.bar(issuer_df.sort_values("revenue"), x="revenue", y="Issuing Bank", orientation="h", color_discrete_sequence=[ACCENT_SOFT])
+        fig_bank = px.bar(issuer_df.sort_values("revenue"), x="revenue", y="Issuing Bank",
+                          orientation="h", color_discrete_sequence=[ACCENT_SOFT])
         fig_bank.update_traces(marker_line_color=CANVAS_BG, marker_line_width=1)
         fig_bank.update_xaxes(title_text="Revenue (R)", tickprefix="R ", separatethousands=True)
         fig_bank.update_yaxes(title_text="")
@@ -463,7 +446,8 @@ with c2:
     )
     if not decl_df.empty and base_attempts > 0:
         decl_df["pct_of_attempts"] = decl_df["count"] / base_attempts
-        fig_decl = px.bar(decl_df, x="pct_of_attempts", y="Decline Reason", orientation="h", color_discrete_sequence=[DANGER])
+        fig_decl = px.bar(decl_df, x="pct_of_attempts", y="Decline Reason", orientation="h",
+                          color_discrete_sequence=[DANGER])
         fig_decl.update_traces(texttemplate="%{x:.0%}", textposition="outside")
         fig_decl.update_xaxes(tickformat=".0%", range=[0, max(0.01, float(decl_df["pct_of_attempts"].max()) * 1.15)])
         fig_decl.update_yaxes(title_text="")
@@ -491,7 +475,7 @@ show_cols = [
 existing_cols = [c for c in show_cols if c in f.columns]
 tbl = f[existing_cols].sort_values("Transaction Date", ascending=False).reset_index(drop=True)
 
-# Optional pretty currency for screen (export keeps raw)
+# Optional display currency
 for col in ["Request Amount", "Settle Amount"]:
     if col in tbl.columns:
         tbl[col] = tbl[col].apply(lambda v: f"R {v:,.2f}" if pd.notnull(v) else "")
@@ -518,6 +502,6 @@ with st.expander("About the metrics"):
 - **Revenue**: sum of **Settle Amount** where a settlement file exists (`Date Payment Extract` present) and amount ≠ 0.
 - **AOV**: Revenue ÷ # of settled rows.
 - **Total Requests**: Sum of **Request Amount** for all rows in the selected range.
-- Visuals are unchanged; this is a pure color/system reskin for a premium dark look.
+- Styling only: visuals unchanged; palette reworked to deep teal with bright aqua accents to match your example.
 """
     )
