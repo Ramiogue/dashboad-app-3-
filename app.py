@@ -33,29 +33,49 @@ FILTER_CNT_BG_OPEN = "#d6dde9"   # expander content (open)
 
 # Semantic
 DANGER  = "#dc2626"      # declines / errors
-INFO    = "#2563eb"
+
+# Neutral categorical palette (issuer & product type)
+NEUTRALS = ["#334155","#475569","#64748b","#94a3b8","#cbd5e1","#e2e8f0"]
 
 def apply_plotly_layout(fig):
     fig.update_layout(
         template="plotly_white",
-        margin=dict(l=10, r=10, t=40, b=10),
+        margin=dict(l=10, r=10, t=46, b=10),
         paper_bgcolor=CARD_BG,
         plot_bgcolor=CARD_BG,
-        font=dict(color=TEXT),
+        font=dict(color=TEXT, size=12),
         title_x=0.01,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
+    fig.update_xaxes(showgrid=True, gridcolor=GREY_200, zeroline=False)
+    fig.update_yaxes(showgrid=True, gridcolor=GREY_200, zeroline=False)
     return fig
 
+def currency_fmt(x):
+    try:
+        return f"R {float(x):,.0f}"
+    except Exception:
+        return "R 0"
+
+def section_title(txt):
+    return f"""
+    <div class="section-title">
+        <h2>{txt}</h2>
+    </div>
+    """
+
 # =========================
-# Global CSS (polished)
+# Global CSS (polished + PowerBI-ish layout)
 # =========================
 st.markdown(
     f"""
     <style>
     /* Canvas */
     .stApp {{ background: {GREY_50}; }}
-    .block-container {{ padding-top: .8rem; padding-bottom: 1.2rem; }}
+    .block-container {{
+      padding-top: .8rem; padding-bottom: 1.2rem;
+      max-width: 1320px; margin: 0 auto;   /* center like a report page */
+    }}
 
     /* Typography */
     html, body, [class^="css"] {{ color: {TEXT}; }}
@@ -63,6 +83,16 @@ st.markdown(
     /* Header */
     .header-row {{ display:flex; align-items:center; justify-content:space-between; margin-bottom:.25rem; }}
     .title-left h1 {{ font-size:1.15rem; margin:0; color:{TEXT}; }}
+
+    /* Section title with accent underline */
+    .section-title h2 {{
+      font-size:1.3rem; margin: 12px 0 6px 0; color:{TEXT};
+      position: relative; padding-bottom:8px;
+    }}
+    .section-title h2:after {{
+      content:""; position:absolute; left:0; bottom:0; height:3px; width:64px;
+      background:{PRIMARY}; border-radius:3px;
+    }}
 
     /* Cards */
     .card {{
@@ -139,6 +169,14 @@ st.markdown(
     [data-testid="stSidebar"] .stDateInput input {{
       background:#fff !important; border:1px solid {GREY_300} !important;
     }}
+
+    /* Subtle horizontal rule under KPIs, PowerBI style */
+    .soft-divider {{
+      height:10px; border-radius:999px;
+      background: linear-gradient(180deg, {GREY_100}, {GREY_100});
+      border:1px solid {GREY_200};
+      margin: 6px 0 16px 0;
+    }}
     </style>
     """,
     unsafe_allow_html=True,
@@ -147,15 +185,6 @@ st.markdown(
 # =========================
 # Auth (from Secrets)
 # =========================
-# COOKIE_KEY = "replace_with_random_secret"
-# merchant_id_col = "Device Serial"  # or "Merchant Number - Business Name"
-#
-# [users."DS-0001"]
-# name = "Store A"
-# email = "storea@example.com"
-# password_hash = "<bcrypt-hash>"
-# merchant_id = "DS-0001"
-
 users_cfg = st.secrets.get("users", {})
 cookie_key = st.secrets.get("COOKIE_KEY", "change-me")
 MERCHANT_ID_COL = st.secrets.get("merchant_id_col", "Merchant Number - Business Name")
@@ -228,10 +257,10 @@ if missing:
     st.stop()
 
 # Robust cleaning (avoid literal "nan" strings)
-tx[MERCHANT_ID_COL]      = tx[MERCHANT_ID_COL].astype(str).str.strip()
-tx["Transaction Date"]   = pd.to_datetime(tx["Transaction Date"], errors="coerce")
-tx["Request Amount"]     = pd.to_numeric(tx["Request Amount"], errors="coerce")
-tx["Settle Amount"]      = pd.to_numeric(tx["Settle Amount"], errors="coerce")
+tx[MERCHANT_ID_COL]       = tx[MERCHANT_ID_COL].astype(str).str.strip()
+tx["Transaction Date"]    = pd.to_datetime(tx["Transaction Date"], errors="coerce")
+tx["Request Amount"]      = pd.to_numeric(tx["Request Amount"], errors="coerce")
+tx["Settle Amount"]       = pd.to_numeric(tx["Settle Amount"], errors="coerce")
 tx["Date Payment Extract"]= tx["Date Payment Extract"].fillna("").astype(str)
 
 for c in ["Product Type","Issuing Bank","Decline Reason","Terminal ID","Device Serial","Auth Code"]:
@@ -296,7 +325,6 @@ approval_rate = safe_div(approved_cnt, attempts_cnt)
 decline_rate  = safe_div(attempts_cnt - approved_cnt, attempts_cnt)
 
 settled_rows = f["is_settled"]
-revenue      = float(f.loc[settled_rows, "Setle Amount".replace("Setle","Settle")].sum())  # safe in case of typo
 revenue      = float(f.loc[settled_rows, "Settle Amount"].sum())
 settled_cnt  = int(settled_rows.sum())
 aov          = safe_div(revenue, settled_cnt)
@@ -329,9 +357,9 @@ cols = st.columns(6, gap="small")
 with cols[0]:
     kpi_card("# Transactions", f"{transactions_cnt:,}")
 with cols[1]:
-    kpi_card("Total Requests", f"R {float(f['Request Amount'].sum()):,.0f}")
+    kpi_card("Total Requests", currency_fmt(f['Request Amount'].sum()))
 with cols[2]:
-    kpi_card("Revenue", f"R {revenue:,.0f}")
+    kpi_card("Revenue", currency_fmt(revenue))
 with cols[3]:
     kpi_card("Approval Rate", f"{(approval_rate*100):.1f}%" if not math.isnan(approval_rate) else "—")
 with cols[4]:
@@ -339,12 +367,14 @@ with cols[4]:
 with cols[5]:
     kpi_card("Average Order Value (AOV)", f"R {aov:,.2f}" if not math.isnan(aov) else "—")
 
-# =========================
-# Revenue per Month — LINE (accent green)
-# =========================
-st.markdown('<div class="card">', unsafe_allow_html=True)
-st.markdown("### Revenue per Month")
+st.markdown('<div class="soft-divider"></div>', unsafe_allow_html=True)
 
+# =========================
+# Charts — Power BI style sections
+# =========================
+# 1) Revenue per Month (Line)
+st.markdown(section_title("Revenue per Month"), unsafe_allow_html=True)
+st.markdown('<div class="card">', unsafe_allow_html=True)
 df_month = (
     f.loc[settled_rows, ["Transaction Date", "Settle Amount"]]
       .assign(month_start=lambda d: pd.to_datetime(d["Transaction Date"]).dt.to_period("M").dt.to_timestamp())
@@ -352,65 +382,77 @@ df_month = (
       .agg(revenue=("Settle Amount", "sum"))
       .sort_values("month_start")
 )
-
 if not df_month.empty:
-    full_months = pd.date_range(df_month["month_start"].min(),
-                                df_month["month_start"].max(),
-                                freq="MS")
-    df_month = (
-        df_month.set_index("month_start")
-                .reindex(full_months, fill_value=0)
-                .rename_axis("month_start")
-                .reset_index()
-    )
+    # fill missing months for smooth line
+    full_months = pd.date_range(df_month["month_start"].min(), df_month["month_start"].max(), freq="MS")
+    df_month = (df_month.set_index("month_start").reindex(full_months, fill_value=0)
+                .rename_axis("month_start").reset_index())
     df_month["month_label"] = df_month["month_start"].dt.strftime("%b %Y")
 
     fig_m = px.line(df_month, x="month_start", y="revenue", markers=True)
     fig_m.update_traces(line=dict(color=PRIMARY, width=2), marker=dict(color=PRIMARY))
     fig_m.update_xaxes(title_text="", tickformat="%b %Y", dtick="M1")
-    fig_m.update_yaxes(title_text="Revenue")
+    fig_m.update_yaxes(title_text="Revenue (R)", tickprefix="R ", separatethousands=True)
     fig_m.update_layout(title_text="Revenue per Month (Line)")
+    fig_m.update_traces(hovertemplate="<b>%{x|%b %Y}</b><br>Revenue: R %{y:,.0f}<extra></extra>")
     apply_plotly_layout(fig_m)
-    st.plotly_chart(fig_m, use_container_width=True)
-
-    st.dataframe(
-        df_month[["month_label", "revenue"]]
-            .rename(columns={"month_label": "Month", "revenue": "Revenue"})
-            .reset_index(drop=True),
-        use_container_width=True, height=220
-    )
+    st.plotly_chart(fig_m, use_container_width=True, height=360)
 else:
     st.info("No settled revenue in the selected period.")
 st.markdown('</div>', unsafe_allow_html=True)
 
-# =========================
-# Row: Issuing Bank Mix + Decline Reasons
-# =========================
-cA, cB = st.columns(2, gap="small")
+# 2) Product Type Mix Over Time (Stacked Area, by Revenue)
+st.markdown(section_title("Product Type Mix Over Time"), unsafe_allow_html=True)
+st.markdown('<div class="card">', unsafe_allow_html=True)
+mix = f.loc[settled_rows, ["Transaction Date","Product Type","Settle Amount"]].copy()
+if not mix.empty:
+    mix["month"] = pd.to_datetime(mix["Transaction Date"]).dt.to_period("M").dt.to_timestamp()
+    mix = (mix.groupby(["month","Product Type"], as_index=False)["Settle Amount"].sum()
+              .rename(columns={"Settle Amount":"revenue"}).sort_values("month"))
+    fig_mix = px.area(mix, x="month", y="revenue", color="Product Type")
+    fig_mix.update_traces(stackgroup="one")
+    fig_mix.update_layout(title_text="Revenue Mix by Product Type (Stacked Area)")
+    fig_mix.update_xaxes(title_text="", tickformat="%b %Y", dtick="M1")
+    fig_mix.update_yaxes(title_text="Revenue (R)", tickprefix="R ", separatethousands=True)
+    fig_mix.update_traces(hovertemplate="<b>%{x|%b %Y}</b><br>%{fullData.name}: R %{y:,.0f}<extra></extra>")
+    # Neutral palette to keep it pro
+    fig_mix.update_traces()
+    fig_mix.update_layout(colorway=NEUTRALS)
+    apply_plotly_layout(fig_mix)
+    st.plotly_chart(fig_mix, use_container_width=True, height=360)
+else:
+    st.info("No settled revenue in the selected period.")
+st.markdown('</div>', unsafe_allow_html=True)
 
-with cA:
+# Two-column row: Top Issuers + Top Declines
+c1, c2 = st.columns((1.2, 1), gap="small")
+
+with c1:
+    st.markdown(section_title("Top Issuing Banks by Revenue"), unsafe_allow_html=True)
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("### Issuing Bank Mix (Revenue)")
     issuer_df = (
         f.loc[settled_rows, ["Issuing Bank", "Settle Amount"]]
          .groupby("Issuing Bank", as_index=False)
          .agg(revenue=("Settle Amount", "sum"))
          .sort_values("revenue", ascending=False)
+         .head(10)
     )
     if not issuer_df.empty:
-        fig_pie = px.pie(issuer_df, values="revenue", names="Issuing Bank", hole=0.5)
-        issuer_colors = ["#334155","#475569","#64748b","#94a3b8","#cbd5e1","#e2e8f0"]
-        fig_pie.update_traces(marker=dict(colors=issuer_colors, line=dict(color="#ffffff", width=1)),
-                              texttemplate="%{label}<br>%{percent:.0%}", textposition="inside")
-        apply_plotly_layout(fig_pie)
-        st.plotly_chart(fig_pie, use_container_width=True)
+        fig_bank = px.bar(issuer_df.sort_values("revenue"), x="revenue", y="Issuing Bank", orientation="h")
+        fig_bank.update_traces(marker_color=NEUTRALS[0], marker_line_color="#ffffff", marker_line_width=1)
+        fig_bank.update_xaxes(title_text="Revenue (R)", tickprefix="R ", separatethousands=True)
+        fig_bank.update_yaxes(title_text="")
+        fig_bank.update_layout(title_text="Top 10 Issuers (Revenue)")
+        fig_bank.update_traces(hovertemplate="%{y}<br>Revenue: R %{x:,.0f}<extra></extra>")
+        apply_plotly_layout(fig_bank)
+        st.plotly_chart(fig_bank, use_container_width=True, height=420)
     else:
         st.info("No revenue in range.")
     st.markdown('</div>', unsafe_allow_html=True)
 
-with cB:
+with c2:
+    st.markdown(section_title("Top Decline Reasons"), unsafe_allow_html=True)
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("### Top Decline Reasons (as % of Attempts)")
     base_attempts = int(len(f))
     decl_df = (
         f.loc[~f["is_approved"], ["Decline Reason"]]
@@ -424,8 +466,11 @@ with cB:
         fig_decl = px.bar(decl_df, x="pct_of_attempts", y="Decline Reason", orientation="h")
         fig_decl.update_traces(marker_color=DANGER, texttemplate="%{x:.0%}", textposition="outside")
         fig_decl.update_xaxes(tickformat=".0%", range=[0, max(0.01, float(decl_df["pct_of_attempts"].max()) * 1.15)])
+        fig_decl.update_yaxes(title_text="")
+        fig_decl.update_layout(title_text="As % of All Attempts")
+        fig_decl.update_traces(hovertemplate="%{y}<br>% of Attempts: %{x:.1%}<extra></extra>")
         apply_plotly_layout(fig_decl)
-        st.plotly_chart(fig_decl, use_container_width=True)
+        st.plotly_chart(fig_decl, use_container_width=True, height=420)
     else:
         st.info("No declines in the selected period.")
     st.markdown('</div>', unsafe_allow_html=True)
@@ -433,8 +478,8 @@ with cB:
 # =========================
 # Transactions table
 # =========================
+st.markdown(section_title("Transactions (Filtered)"), unsafe_allow_html=True)
 st.markdown('<div class="card">', unsafe_allow_html=True)
-st.markdown("### Transactions (filtered)")
 show_cols = [
     "Transaction Date", "Request Amount", "Settle Amount",
     "Decline Reason", "Auth Code",
@@ -445,11 +490,19 @@ show_cols = [
 ]
 existing_cols = [c for c in show_cols if c in f.columns]
 tbl = f[existing_cols].sort_values("Transaction Date", ascending=False).reset_index(drop=True)
+
+# Pretty currency in table (optional, fast)
+for col in ["Request Amount", "Settle Amount"]:
+    if col in tbl.columns:
+        tbl[col] = tbl[col].apply(lambda v: f"R {v:,.2f}" if pd.notnull(v) else "")
+
 st.dataframe(tbl, use_container_width=True, height=520)
 
 @st.cache_data
 def to_csv_bytes(df: pd.DataFrame) -> bytes:
-    return df.to_csv(index=False).encode("utf-8")
+    # export raw numeric, not formatted strings
+    raw = f[existing_cols].sort_values("Transaction Date", ascending=False).reset_index(drop=True)
+    return raw.to_csv(index=False).encode("utf-8")
 
 st.download_button("Download filtered transactions (CSV)", data=to_csv_bytes(tbl),
                    file_name="filtered_transactions.csv", mime="text/csv")
@@ -466,6 +519,6 @@ with st.expander("About the metrics"):
 - **Revenue**: sum of **Settle Amount** where a settlement file exists (`Date Payment Extract` present) and amount ≠ 0.
 - **AOV**: Revenue ÷ # of settled rows.
 - **Total Requests**: Sum of **Request Amount** for all rows in the selected range.
-- Visuals use a restrained palette (green for positive metrics, red for declines, neutrals elsewhere).
+- Visuals use a restrained palette: green for positive, red for declines, neutrals for categorical series.
 """
     )
