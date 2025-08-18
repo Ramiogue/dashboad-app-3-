@@ -13,29 +13,26 @@ import streamlit_authenticator as stauth
 st.set_page_config(page_title="Merchant Dashboard", page_icon=None, layout="wide")
 
 # =========================
-# Professional Theme Tokens
+# Theme Tokens (brand)
 # =========================
 PRIMARY = "#0B6E4F"      # brand green
-GREEN_2 = "#149E67"      # deeper green (for open state / hover)
+GREEN_2 = "#149E67"      # darker brand green
 TEXT    = "#0f172a"      # slate-900
 CARD_BG = "#ffffff"
 
 GREY_50  = "#f8fafc"     # page bg
-GREY_100 = "#f1f5f9"     # light section bg
-GREY_200 = "#e2e8f0"     # borders
+GREY_100 = "#f1f5f9"
+GREY_200 = "#e2e8f0"
 GREY_300 = "#cbd5e1"
 GREY_400 = "#94a3b8"
 
-# Sidebar & filter panel tones
 SIDEBAR_BG         = "#eef2f6"
-FILTER_HDR_BG_DEF  = PRIMARY    # expander header (collapsed) -> brand green
-FILTER_HDR_BG_OPEN = GREEN_2    # expander header (open)      -> darker green
-FILTER_CNT_BG_OPEN = "#e8f5ef"  # expander content (soft green tint)
+FILTER_HDR_BG_DEF  = PRIMARY    # collapsed header
+FILTER_HDR_BG_OPEN = GREEN_2    # open header
+FILTER_CNT_BG_OPEN = "#e8f5ef"  # body tint
 
-# Semantic
-DANGER  = "#dc2626"      # declines / errors
+DANGER  = "#dc2626"      # declines
 
-# Neutral categorical palette (issuer & product type)
 NEUTRALS = ["#334155","#475569","#64748b","#94a3b8","#cbd5e1","#e2e8f0"]
 
 def apply_plotly_layout(fig):
@@ -53,10 +50,8 @@ def apply_plotly_layout(fig):
     return fig
 
 def currency_fmt(x):
-    try:
-        return f"R {float(x):,.0f}"
-    except Exception:
-        return "R 0"
+    try: return f"R {float(x):,.0f}"
+    except Exception: return "R 0"
 
 def section_title(txt):
     return f"""
@@ -66,37 +61,29 @@ def section_title(txt):
     """
 
 # =========================
-# Global CSS (polished + PowerBI-ish layout)
+# Global CSS
 # =========================
 st.markdown(
     f"""
     <style>
-    /* Canvas */
     .stApp {{ background: {GREY_50}; }}
     .block-container {{
       padding-top: .8rem; padding-bottom: 1.2rem;
-      max-width: 1320px; margin: 0 auto;   /* center like a report page */
+      max-width: 1320px; margin: 0 auto;
     }}
 
-    /* Typography */
-    html, body, [class^="css"] {{ color: {TEXT}; }}
-
-    /* Header row with logo + title */
-    .header-row {{
-      display:flex; align-items:center; gap:14px; margin-bottom:.25rem;
-    }}
-    .header-logo img {{
-      display:block; height:44px; width:auto; border-radius:6px;
-    }}
+    /* Header with logo + big title */
+    .header-wrap {{ display:flex; align-items:center; gap:14px; margin-bottom:.25rem; }}
+    .header-logo img {{ display:block; height:48px; width:auto; border-radius:6px; }}
     .title-left h1 {{
-      font-size: 1.6rem;               /* bigger title */
+      font-size: 1.8rem;        /* bigger title */
       font-weight: 800;
       margin: 0;
       color: {TEXT};
       letter-spacing: .2px;
     }}
 
-    /* Section title with accent underline */
+    /* Section title */
     .section-title h2 {{
       font-size:1.3rem; margin: 12px 0 6px 0; color:{TEXT};
       position: relative; padding-bottom:8px;
@@ -115,9 +102,8 @@ st.markdown(
       box-shadow:0 1px 2px rgba(2,6,23,0.04);
       margin-bottom:10px;
     }}
-    .card h3 {{ margin-top:.2rem; color:{TEXT}; font-size:1.0rem; }}
 
-    /* KPI cards */
+    /* KPI */
     .kpi-card {{
       background:{CARD_BG};
       border:1px solid {GREY_200};
@@ -156,43 +142,36 @@ st.markdown(
       box-shadow: inset -1px 0 0 {GREY_200};
     }}
 
-    /* Filters expander */
+    /* Filters expander (GREEN) */
     [data-testid="stSidebar"] details {{
       border:1px solid {GREY_200}; border-radius:12px; overflow:hidden;
     }}
-
-    /* Expander header (collapsed) */
+    /* collapsed */
     [data-testid="stSidebar"] details > summary.streamlit-expanderHeader {{
-      background:{FILTER_HDR_BG_DEF};
-      color:#ffffff;                       /* white text on green */
+      background:{FILTER_HDR_BG_DEF} !important;
+      color:#ffffff !important;
       font-weight:700; padding:8px 12px; list-style:none;
     }}
-
-    /* Expander header (open) */
+    /* open */
     [data-testid="stSidebar"] details[open] > summary.streamlit-expanderHeader {{
-      background:{FILTER_HDR_BG_OPEN};
-      color:#ffffff;
-      border-bottom:1px solid {GREY_200};
+      background:{FILTER_HDR_BG_OPEN} !important;
+      color:#ffffff !important;
+      border-bottom:1px solid {GREY_200} !important;
     }}
-
-    /* Expander content (open) */
+    /* body */
     [data-testid="stSidebar"] details[open] .streamlit-expanderContent {{
-      background:{FILTER_CNT_BG_OPEN};
-      padding:8px 12px;
+      background:{FILTER_CNT_BG_OPEN} !important;
+      padding:8px 12px !important;
     }}
 
-    /* Multiselect chips */
-    [data-testid="stSidebar"] .stMultiSelect [data-baseweb="tag"] {{ border-radius:8px; }}
-
-    /* Sidebar date input pill */
+    /* Date input pill in sidebar */
     [data-testid="stSidebar"] .stDateInput input {{
       background:#fff !important; border:1px solid {GREY_300} !important;
     }}
 
-    /* Subtle horizontal rule under KPIs, PowerBI style */
     .soft-divider {{
       height:10px; border-radius:999px;
-      background: linear-gradient(180deg, {GREY_100}, {GREY_100});
+      background: {GREY_100};
       border:1px solid {GREY_200};
       margin: 6px 0 16px 0;
     }}
@@ -219,7 +198,6 @@ authenticator = stauth.Authenticate(
     cookie_expiry_days=7,
 )
 
-# Optional: login inside a card
 with st.container():
     st.markdown('<div class="card">', unsafe_allow_html=True)
     authenticator.login(location="main")
@@ -275,13 +253,11 @@ if missing:
     st.error(f"Missing required column(s): {', '.join(sorted(missing))}")
     st.stop()
 
-# Robust cleaning (avoid literal "nan" strings)
 tx[MERCHANT_ID_COL]       = tx[MERCHANT_ID_COL].astype(str).str.strip()
 tx["Transaction Date"]    = pd.to_datetime(tx["Transaction Date"], errors="coerce")
 tx["Request Amount"]      = pd.to_numeric(tx["Request Amount"], errors="coerce")
 tx["Settle Amount"]       = pd.to_numeric(tx["Settle Amount"], errors="coerce")
 tx["Date Payment Extract"]= tx["Date Payment Extract"].fillna("").astype(str)
-
 for c in ["Product Type","Issuing Bank","Decline Reason","Terminal ID","Device Serial","Auth Code"]:
     tx[c] = tx[c].fillna("").astype(str)
 
@@ -290,7 +266,6 @@ if f0.empty:
     st.warning(f"No transactions for '{merchant_id_value}' in '{MERCHANT_ID_COL}'.")
     st.stop()
 
-# Approval & Settlement
 def approved_mask(df):
     dr = df["Decline Reason"].astype(str).str.strip()
     return dr.str.startswith("00") | (df["Auth Code"].astype(str).str.strip().ne(""))
@@ -304,8 +279,13 @@ f0["is_approved"] = approved_mask(f0)
 f0["is_settled"]  = settled_mask(f0)
 
 # =========================
-# Sidebar filters (collapsible, brand-green header)
+# Sidebar filters
 # =========================
+# Optional logo uploader (so the logo always works even if assets/ path is missing)
+uploaded_logo = st.sidebar.file_uploader("Logo (optional)", type=["png","jpg","jpeg","webp"])
+if uploaded_logo is not None:
+    st.session_state["_logo_bytes"] = uploaded_logo.read()
+
 with st.sidebar.expander("Filters", expanded=True):
     valid_dates = f0["Transaction Date"].dropna()
     min_d = pd.to_datetime(valid_dates.min()).date()
@@ -350,26 +330,25 @@ aov          = safe_div(revenue, settled_cnt)
 
 # =========================
 # Header (logo + big title)
-# Put your logo at one of these paths: assets/spaza_eats.png|jpg|webp or assets/logo.png|jpg|webp
 # =========================
 logo_path = None
 for p in (
     "assets/spaza_eats.png","assets/spaza_eats.jpg","assets/spaza_eats.webp",
     "assets/logo.png","assets/logo.jpg","assets/logo.webp",
-    "spaza_eats.png","spaza_eats.jpg","spaza_eats.webp"
+    "spaza_eats.png","spaza_eats.jpg","spaza_eats.webp",
 ):
     if os.path.exists(p): logo_path = p; break
 
-if logo_path:
-    col_logo, col_title = st.columns([0.09, 0.91])
-    with col_logo:
-        st.markdown('<div class="header-logo">', unsafe_allow_html=True)
-        st.image(logo_path, use_column_width=False)
-        st.markdown('</div>', unsafe_allow_html=True)
-    with col_title:
-        st.markdown('<div class="header-row"><div class="title-left"><h1>Merchant Dashboard</h1></div></div>', unsafe_allow_html=True)
-else:
-    st.markdown('<div class="header-row"><div class="title-left"><h1>Merchant Dashboard</h1></div></div>', unsafe_allow_html=True)
+col_logo, col_title = st.columns([0.1, 0.9])
+with col_logo:
+    st.markdown('<div class="header-wrap">', unsafe_allow_html=True)
+    if "_logo_bytes" in st.session_state:
+        st.image(st.session_state["_logo_bytes"], use_column_width=False, caption=None)
+    elif logo_path:
+        st.image(logo_path, use_column_width=False, caption=None)
+    st.markdown('</div>', unsafe_allow_html=True)
+with col_title:
+    st.markdown('<div class="title-left"><h1>Merchant Dashboard</h1></div>', unsafe_allow_html=True)
 
 src_path = f["__path__"].iat[0] if "__path__" in f.columns and not f.empty else "—"
 st.caption(f"Merchant: **{merchant_id_value}**  •  Source: `{src_path}`  •  Date: {start_date} → {end_date}")
@@ -403,9 +382,8 @@ with cols[5]:
 st.markdown('<div class="soft-divider"></div>', unsafe_allow_html=True)
 
 # =========================
-# Charts — Power BI style sections
+# Charts
 # =========================
-# 1) Revenue per Month (Line)
 st.markdown(section_title("Revenue per Month"), unsafe_allow_html=True)
 st.markdown('<div class="card">', unsafe_allow_html=True)
 df_month = (
@@ -417,8 +395,7 @@ df_month = (
 )
 if not df_month.empty:
     full_months = pd.date_range(df_month["month_start"].min(), df_month["month_start"].max(), freq="MS")
-    df_month = (df_month.set_index("month_start").reindex(full_months, fill_value=0)
-                .rename_axis("month_start").reset_index())
+    df_month = df_month.set_index("month_start").reindex(full_months, fill_value=0).rename_axis("month_start").reset_index()
     df_month["month_label"] = df_month["month_start"].dt.strftime("%b %Y")
 
     fig_m = px.line(df_month, x="month_start", y="revenue", markers=True)
@@ -433,54 +410,39 @@ else:
     st.info("No settled revenue in the selected period.")
 st.markdown('</div>', unsafe_allow_html=True)
 
-# 2) Product Type Mix (Pie / Donut)
+# Pie
 st.markdown(section_title("Product Type Mix (Pie)"), unsafe_allow_html=True)
 st.markdown('<div class="card">', unsafe_allow_html=True)
-
 prod_pie = f.loc[settled_rows, ["Product Type", "Settle Amount"]].copy()
 if not prod_pie.empty:
-    prod_pie = (
-        prod_pie.groupby("Product Type", as_index=False)["Settle Amount"]
-                .sum()
-                .rename(columns={"Settle Amount": "revenue"})
-                .sort_values("revenue", ascending=False)
-    )
-
-    fig_pie_pt = px.pie(
-        prod_pie,
-        values="revenue",
-        names="Product Type",
-        hole=0.5,     # donut look
-    )
+    prod_pie = (prod_pie.groupby("Product Type", as_index=False)["Settle Amount"]
+                .sum().rename(columns={"Settle Amount":"revenue"})
+                .sort_values("revenue", ascending=False))
+    fig_pie_pt = px.pie(prod_pie, values="revenue", names="Product Type", hole=0.5)
     fig_pie_pt.update_traces(
         textposition="inside",
         texttemplate="%{label}<br>R %{value:,.0f}<br>%{percent:.0%}",
         hovertemplate="%{label}<br>Revenue: R %{value:,.0f} (%{percent:.1%})<extra></extra>",
         marker=dict(line=dict(color="#ffffff", width=1))
     )
-    fig_pie_pt.update_layout(
-        title_text="Revenue by Product Type",
-        colorway=NEUTRALS
-    )
+    fig_pie_pt.update_layout(title_text="Revenue by Product Type", colorway=NEUTRALS)
     apply_plotly_layout(fig_pie_pt)
     st.plotly_chart(fig_pie_pt, use_container_width=True, height=420)
 else:
     st.info("No settled revenue in the selected period.")
 st.markdown('</div>', unsafe_allow_html=True)
 
-# Two-column row: Top Issuers + Top Declines
+# Two-column row
 c1, c2 = st.columns((1.2, 1), gap="small")
 
 with c1:
     st.markdown(section_title("Top Issuing Banks by Revenue"), unsafe_allow_html=True)
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    issuer_df = (
-        f.loc[settled_rows, ["Issuing Bank", "Settle Amount"]]
-         .groupby("Issuing Bank", as_index=False)
-         .agg(revenue=("Settle Amount", "sum"))
-         .sort_values("revenue", ascending=False)
-         .head(10)
-    )
+    issuer_df = (f.loc[settled_rows, ["Issuing Bank","Settle Amount"]]
+                 .groupby("Issuing Bank", as_index=False)
+                 .agg(revenue=("Settle Amount","sum"))
+                 .sort_values("revenue", ascending=False)
+                 .head(10))
     if not issuer_df.empty:
         fig_bank = px.bar(issuer_df.sort_values("revenue"), x="revenue", y="Issuing Bank", orientation="h")
         fig_bank.update_traces(marker_color=NEUTRALS[0], marker_line_color="#ffffff", marker_line_width=1)
@@ -498,13 +460,11 @@ with c2:
     st.markdown(section_title("Top Decline Reasons"), unsafe_allow_html=True)
     st.markdown('<div class="card">', unsafe_allow_html=True)
     base_attempts = int(len(f))
-    decl_df = (
-        f.loc[~f["is_approved"], ["Decline Reason"]]
-         .value_counts()
-         .reset_index(name="count")
-         .rename(columns={"index": "Decline Reason"})
-         .sort_values("count", ascending=True)
-    )
+    decl_df = (f.loc[~f["is_approved"], ["Decline Reason"]]
+               .value_counts()
+               .reset_index(name="count")
+               .rename(columns={"index":"Decline Reason"})
+               .sort_values("count", ascending=True))
     if not decl_df.empty and base_attempts > 0:
         decl_df["pct_of_attempts"] = decl_df["count"] / base_attempts
         fig_decl = px.bar(decl_df, x="pct_of_attempts", y="Decline Reason", orientation="h")
@@ -520,36 +480,32 @@ with c2:
     st.markdown('</div>', unsafe_allow_html=True)
 
 # =========================
-# Transactions table
+# Table
 # =========================
 st.markdown(section_title("Transactions (Filtered)"), unsafe_allow_html=True)
 st.markdown('<div class="card">', unsafe_allow_html=True)
 show_cols = [
-    "Transaction Date", "Request Amount", "Settle Amount",
-    "Decline Reason", "Auth Code",
-    "Issuing Bank", "BIN", "Product Type",
-    "Terminal ID", "Device Serial",
-    "Date Payment Extract", "System Batch Number", "Device Batch Number",
-    "System Trace Audit Number", "Retrieval Reference", "UTI", "Online Reference Number",
+    "Transaction Date","Request Amount","Settle Amount","Decline Reason","Auth Code",
+    "Issuing Bank","BIN","Product Type","Terminal ID","Device Serial",
+    "Date Payment Extract","System Batch Number","Device Batch Number",
+    "System Trace Audit Number","Retrieval Reference","UTI","Online Reference Number",
 ]
 existing_cols = [c for c in show_cols if c in f.columns]
 tbl = f[existing_cols].sort_values("Transaction Date", ascending=False).reset_index(drop=True)
 
-# Pretty currency in table (optional, fast)
-for col in ["Request Amount", "Settle Amount"]:
+for col in ["Request Amount","Settle Amount"]:
     if col in tbl.columns:
         tbl[col] = tbl[col].apply(lambda v: f"R {v:,.2f}" if pd.notnull(v) else "")
 
-st.dataframe(tbl, use_column_width=True, height=520)
+st.dataframe(tbl, use_container_width=True, height=520)  # <-- fixed arg
 
 @st.cache_data
-def to_csv_bytes(df: pd.DataFrame) -> bytes:
-    # export raw numeric, not formatted strings
+def to_csv_bytes():
     raw = f[existing_cols].sort_values("Transaction Date", ascending=False).reset_index(drop=True)
     return raw.to_csv(index=False).encode("utf-8")
 
-st.download_button("Download filtered transactions (CSV)", data=to_csv_bytes(tbl),
-                   file_name="filtered_transactions.csv", mime="text/csv")
+st.download_button("Download filtered transactions (CSV)",
+                   data=to_csv_bytes(), file_name="filtered_transactions.csv", mime="text/csv")
 st.markdown('</div>', unsafe_allow_html=True)
 
 # =========================
@@ -563,6 +519,5 @@ with st.expander("About the metrics"):
 - **Revenue**: sum of **Settle Amount** where a settlement file exists (`Date Payment Extract` present) and amount ≠ 0.
 - **AOV**: Revenue ÷ # of settled rows.
 - **Total Requests**: Sum of **Request Amount** for all rows in the selected range.
-- Visuals use a restrained palette: green for positive, red for declines, neutrals for categorical series.
 """
     )
